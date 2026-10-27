@@ -113,7 +113,8 @@ function extractKeyTerms(text: string): KeyTerm[] {
   }
   const counts = new Map<string, number>();
   for (const m of plain.matchAll(/\b([A-Z]{2,6}s?)\b/g)) counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
-  for (const [acr, n] of counts) if (n >= 2 && !terms.has(acr) && !terms.has(acr.replace(/s$/, ''))) terms.set(acr, acr);
+  const NOT_TERMS = new Set(['ID', 'IDs', 'OK', 'AM', 'PM', 'TODO', 'NOTE']);
+  for (const [acr, n] of counts) if (n >= 2 && !NOT_TERMS.has(acr) && !terms.has(acr) && !terms.has(acr.replace(/s$/, ''))) terms.set(acr, acr);
   for (const m of plain.matchAll(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/g)) {
     const phrase = m[1];
     if (!STOP.has(phrase.split(' ')[0]) && (plain.match(new RegExp(`\\b${escapeRx(phrase)}\\b`, 'g'))?.length ?? 0) >= 2) terms.set(phrase, phrase);

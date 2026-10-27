@@ -2,6 +2,8 @@ import { env } from './config/env.js';
 import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { storage } from './config/storage.js';
 import { createApp } from './app.js';
+import { closeEventBus } from './jobs/eventBus.js';
+import { closeQueues, startWorkers } from './jobs/queues.js';
 import { logger } from './utils/logger.js';
 
 async function main() {
@@ -9,6 +11,8 @@ async function main() {
   await storage.ensureReady();
 
   const app = createApp();
+  // In development the API can also process jobs; in Docker a separate worker container does.
+  const stopWorkers = env.RUN_WORKER_IN_PROCESS ? startWorkers() : async () => undefined;
   const server = app.listen(env.PORT, () => {
     logger.info({ port: env.PORT, aiProvider: env.AI_TEXT_PROVIDER, storage: env.STORAGE_DRIVER }, 'CyberLearn API listening');
   });
@@ -16,6 +20,9 @@ async function main() {
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutting down');
     server.close();
+    await stopWorkers();
+    await closeQueues();
+    await closeEventBus();
     await disconnectDatabase();
     process.exit(0);
   };

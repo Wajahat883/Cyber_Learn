@@ -10,12 +10,18 @@ import { authenticate } from './middleware/authenticate.js';
 import { csrfProtection } from './middleware/csrf.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { apiLimiter } from './middleware/rateLimit.js';
+import { askRouter } from './modules/ask/ask.routes.js';
+import { assetsRouter } from './modules/assets/assets.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
+import { generationsRouter } from './modules/generations/generations.routes.js';
+import { lessonsRouter } from './modules/lessons/lessons.routes.js';
+import { presentationsRouter } from './modules/presentations/presentations.routes.js';
 import { progressRouter } from './modules/progress/progress.routes.js';
 import { projectsRouter } from './modules/projects/projects.routes.js';
 import { sourcesRouter } from './modules/sources/sources.routes.js';
 import { subjectsRouter } from './modules/subjects/subjects.routes.js';
 import { logger } from './utils/logger.js';
+import './jobs/processors.js';
 
 export function createApp() {
   const app = express();
@@ -56,6 +62,11 @@ export function createApp() {
   secured.use(projectsRouter);
   secured.use(sourcesRouter);
   secured.use(progressRouter);
+  secured.use(generationsRouter);
+  secured.use(lessonsRouter);
+  secured.use(presentationsRouter);
+  secured.use(assetsRouter);
+  secured.use(askRouter);
   api.use(secured);
 
   app.use('/api/v1', api);

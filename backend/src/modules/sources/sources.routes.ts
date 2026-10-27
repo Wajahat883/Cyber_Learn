@@ -1,12 +1,17 @@
 import { Router } from 'express';
-import { TextSourceSchema } from '@cyberlearn/shared';
+import multer from 'multer';
+import { MAX_UPLOAD_BYTES, TextSourceSchema } from '@cyberlearn/shared';
 import { storage } from '../../config/storage.js';
 import { findOwned } from '../../middleware/authorize.js';
+import { uploadLimiter } from '../../middleware/rateLimit.js';
 import { validate, validateIds } from '../../middleware/validate.js';
 import { Project, Source, SourceChunk } from '../../models/index.js';
 import { recordActivity } from '../../services/activity.js';
 import { param, userId } from '../../utils/http.js';
-import { createTextSource } from './sources.service.js';
+import { badRequest } from '../../utils/errors.js';
+import { createTextSource, createUploadedSource } from './sources.service.js';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 5 } });
 
 export const sourcesRouter = Router();
 
@@ -14,6 +19,16 @@ sourcesRouter.post('/projects/:id/sources/text', validateIds('id'), validate(Tex
   const ownerId = userId(req);
   const project = await findOwned(Project, param(req, 'id'), ownerId, 'Project');
   const { source, duplicate } = await createTextSource({ ownerId, projectId: String(project._id), ...req.body });
+  if (!duplicate) await recordActivity({ ownerId, type: 'source_added', projectId: project._id, detail: source.title });
+  res.status(duplicate ? 200 : 201).json({ source, duplicate });
+});
+
+sourcesRouter.post('/projects/:id/sources/upload', uploadLimiter, validateIds('id'), upload.single('file'), async (req, res) => {
+  const ownerId = userId(req);
+  const project = await findOwned(Project, param(req, 'id'), ownerId, 'Project');
+  if (!req.file) throw badRequest('Attach a file in the "file" field');
+  const title = typeof req.body?.title === 'string' && req.body.title.trim() ? req.body.title.trim().slice(0, 200) : undefined;
+  const { source, duplicate } = await createUploadedSource({ ownerId, projectId: String(project._id), filename: req.file.originalname, buffer: req.file.buffer, title });
   if (!duplicate) await recordActivity({ ownerId, type: 'source_added', projectId: project._id, detail: source.title });
   res.status(duplicate ? 200 : 201).json({ source, duplicate });
 });

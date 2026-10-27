@@ -43,17 +43,17 @@ Phase 0 (Docker) was added on top of the spec so the whole application runs loca
 
 ## Phase 2 — AI learning content
 
-- [ ] 2.1 PDF / DOCX / TXT / Markdown upload with magic-byte validation and extraction
-- [ ] 2.2 Object storage abstraction (local volume or S3/MinIO)
-- [ ] 2.3 AI provider abstraction (mock, OpenAI-compatible / OpenCode, Anthropic)
-- [ ] 2.4 Background jobs (BullMQ + Redis, inline fallback), retries, cancel, per-user limits
-- [ ] 2.5 Content analyzer with schema validation + repair step
-- [ ] 2.6 Content Analysis Preview screen (edit title, remove sections)
-- [ ] 2.7 Structured lesson generator with source references
-- [ ] 2.8 Generation Workspace with live SSE progress and per-stage retry
-- [ ] 2.9 Lesson Viewer (outline, sections, key concepts, search, bookmarks, mark understood)
-- [ ] 2.10 Lesson editing (Tiptap) with autosave
-- [ ] 2.11 Acceptance: pasted content becomes a structured, editable lesson
+- [x] ✅ 2.1 PDF / DOCX / TXT / Markdown upload with magic-byte validation and extraction
+- [x] ✅ 2.2 Object storage abstraction (local volume or S3/MinIO)
+- [x] ✅ 2.3 AI provider abstraction (mock, OpenAI-compatible / OpenCode, Anthropic) — mock + OpenAI-compatible tested; Anthropic adapter type-checked against the SDK, needs a live key to try
+- [x] ✅ 2.4 Background jobs (BullMQ + Redis, inline fallback), retries, cancel, per-user limits
+- [x] ✅ 2.5 Content analyzer with schema validation + repair step
+- [x] ✅ 2.6 Content Analysis Preview screen (edit title, remove sections)
+- [x] ✅ 2.7 Structured lesson generator with source references
+- [x] ✅ 2.8 Generation Workspace with live SSE progress and per-stage retry
+- [x] ✅ 2.9 Lesson Viewer (outline, sections, key concepts, search, bookmarks, mark understood)
+- [x] ✅ 2.10 Lesson editing (Tiptap) with autosave
+- [x] ✅ 2.11 Acceptance: pasted content becomes a structured, editable lesson
 
 ## Phase 3 — Diagrams and visuals
 
