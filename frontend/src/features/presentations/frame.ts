@@ -30,7 +30,8 @@ export function frameAt(slide: Slide, elapsedMs: number): SlideFrame {
     const local = elapsedMs - event.atMs;
     switch (event.type) {
       case 'reveal': {
-        const amount = local < 0 ? 0 : ease(Math.min(1, local / Math.max(1, event.durationMs)));
+        // Elements scheduled at 0 ms are on screen from the first frame, so a paused slide is never blank.
+        const amount = event.atMs === 0 ? 1 : local < 0 ? 0 : ease(Math.min(1, local / Math.max(1, event.durationMs)));
         reveal.set(event.targetId, Math.max(reveal.get(event.targetId) ?? 0, amount));
         break;
       }

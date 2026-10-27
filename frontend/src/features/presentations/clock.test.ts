@@ -105,6 +105,7 @@ describe('frameAt', () => {
     const f = frameAt(slide, 500);
     expect(f.reveal.get('source')).toBe(0);
     expect(f.reveal.get('siem')).toBe(1);
+    expect(frameAt(slide, 0).reveal.get('title')).toBe(1);
     expect(frameAt(slide, 3500).highlighted.has('siem')).toBe(true);
     expect(frameAt(slide, 4500).highlighted.has('siem')).toBe(false);
   });

@@ -6,6 +6,9 @@ import { SlideSchema } from './presentation.js';
 
 /** Request bodies shared by the API (validation) and the frontend (forms). */
 
+/** A MongoDB ObjectId in hex form. */
+export const ObjectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid id');
+
 export const MAX_PASTED_TEXT_CHARS = 200_000;
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 export const ALLOWED_UPLOAD_EXTENSIONS = ['.pdf', '.docx', '.txt', '.md', '.markdown'] as const;
@@ -43,7 +46,7 @@ export const SubjectSchema = z.object({
 });
 
 export const LearningPathSchema = z.object({
-  subjectId: z.string().length(24),
+  subjectId: ObjectIdSchema,
   title: z.string().trim().min(1).max(150),
   description: z.string().trim().max(1000).default(''),
   modules: z
@@ -51,7 +54,7 @@ export const LearningPathSchema = z.object({
       z.object({
         title: z.string().trim().min(1).max(150),
         description: z.string().trim().max(600).default(''),
-        projectIds: z.array(z.string().length(24)).max(50).default([]),
+        projectIds: z.array(ObjectIdSchema).max(50).default([]),
       }),
     )
     .max(50)
@@ -61,7 +64,7 @@ export const LearningPathSchema = z.object({
 export const CreateProjectSchema = z.object({
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2000).default(''),
-  subjectId: z.string().length(24).optional(),
+  subjectId: ObjectIdSchema.optional(),
   tags: tags.default([]),
   preferences: GenerationPreferencesSchema.default(GenerationPreferencesSchema.parse({})),
 });
@@ -69,7 +72,7 @@ export const CreateProjectSchema = z.object({
 export const UpdateProjectSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   description: z.string().trim().max(2000).optional(),
-  subjectId: z.string().length(24).nullable().optional(),
+  subjectId: ObjectIdSchema.nullable().optional(),
   tags: tags.optional(),
   favorite: z.boolean().optional(),
   preferences: GenerationPreferencesSchema.partial().optional(),
@@ -77,7 +80,7 @@ export const UpdateProjectSchema = z.object({
 
 export const ListProjectsQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
-  subjectId: z.string().length(24).optional(),
+  subjectId: ObjectIdSchema.optional(),
   tag: z.string().trim().max(40).optional(),
   status: z.string().max(40).optional(),
   favorite: z.enum(['true', 'false']).optional(),
@@ -93,7 +96,7 @@ export const TextSourceSchema = z.object({
 });
 
 export const StartGenerationSchema = z.object({
-  sourceIds: z.array(z.string().length(24)).min(1).max(10),
+  sourceIds: z.array(ObjectIdSchema).min(1).max(10),
   preferences: GenerationPreferencesSchema.optional(),
   /** When false, pause after analysis so the user can review the plan (Screen 3). */
   autoContinue: z.boolean().default(false),
@@ -139,7 +142,7 @@ export const ProgressUpdateSchema = z.object({
 
 export const AskSchema = z.object({
   question: z.string().trim().min(3).max(1000),
-  lessonId: z.string().length(24).optional(),
+  lessonId: ObjectIdSchema.optional(),
   sectionId: z.string().max(80).optional(),
 });
 

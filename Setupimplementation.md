@@ -91,18 +91,40 @@ Phase 0 (Docker) was added on top of the spec so the whole application runs loca
 
 ## Phase 7 — Export and polish
 
-- [ ] 7.1 PDF notes export
-- [ ] 7.2 PPTX export with speaker notes
-- [ ] 7.3 Markdown export / data backup
-- [ ] 7.4 Presentation version history
-- [ ] 7.5 Settings screen (profile, preferences, usage, storage, data export, account deletion)
-- [ ] 7.6 Mobile layout polish, operational logging, security review
+- [x] ✅ 7.1 PDF notes export
+- [x] ✅ 7.2 PPTX export with speaker notes
+- [x] ✅ 7.3 Markdown export / data backup
+- [x] ✅ 7.4 Presentation version history
+- [x] ✅ 7.5 Settings screen (profile, preferences, usage, storage, data export, account deletion)
+- [x] ✅ 7.6 Mobile layout polish, operational logging, security review
 
 ## Phase 8 — Universal workspace extras (Roman Urdu sections 7–8)
 
-- [ ] 8.1 Ask My Notes (grounded answers with source references)
-- [ ] 8.2 Knowledge Graph across lessons and subjects
-- [ ] 8.3 Final end-to-end check against section 21 "Definition of Done"
+- [x] ✅ 8.1 Ask My Notes (grounded answers with source references)
+- [x] ✅ 8.2 Knowledge Graph across lessons and subjects
+- [x] ✅ 8.3 Final end-to-end check against section 21 "Definition of Done"
+
+**Definition of Done (section 21) — verified 2026-10-27**
+
+| # | Requirement | Verified by |
+| - | ----------- | ----------- |
+| 1 | Paste a lesson or upload a document | phase 1/2 API tests, browser runs (paste + Markdown/PDF upload) |
+| 2 | Content extracted and analyzed | PDF extraction test, pipeline tests, production worker-thread check |
+| 3 | Editable, structured lesson | Tiptap autosave + version history (browser + API tests) |
+| 4 | Relevant diagrams and illustrations | phase 3 tests (validated diagrams, illustration fallback/regenerate) |
+| 5 | Slide renderer assembles a presentation | manifest validation, 7 presentation types |
+| 6 | Visual events animate in order | clock/frame unit tests, browser player run |
+| 7 | Narration plays when enabled | captions + browser speech, stored TTS audio test |
+| 8 | Pause, resume, navigate, revisit | player browser run (pause holds time, resume continues), resume at last slide |
+| 9 | Flashcards and quizzes with explanations | phase 6 tests and browser run |
+| 10 | Lesson saved in MongoDB | all API tests |
+| 11 | Assets remain after refresh | gallery/player reload in browser runs |
+| 12 | Export notes and presentation formats | PDF, PPTX (speaker notes), Markdown tests + PDF render check |
+| 13 | Failed stages retried without losing work | partial-failure + retry test (sections reused) |
+| 14 | Private, access-controlled data | ownership tests on every resource, security tests |
+| 15 | Claims and diagrams grounded in the material | source references, grounding labels, diagrams only from validated nodes/edges |
+
+Totals: 67 automated tests (10 shared, 50 backend, 7 frontend) + 7 browser acceptance runs, all passing. Docker itself still needs one real `docker compose up --build` on a machine with Docker installed.
 
 ---
 

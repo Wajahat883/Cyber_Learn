@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { createBrowserRouter, Link } from 'react-router';
+import { createBrowserRouter, isRouteErrorResponse, Link, useRouteError } from 'react-router';
 import { AppLayout } from '../components/layout/AppLayout';
 import { PageLoader, EmptyState } from '../components/ui/Feedback';
 import { ForgotPasswordPage, LoginPage, RegisterPage, ResetPasswordPage } from '../features/auth/AuthPages';
@@ -16,6 +16,9 @@ import { PlayerPage } from '../features/presentations/PlayerPage';
 import { PresentationsPage } from '../features/presentations/PresentationsPage';
 import { RevisionCenterPage } from '../features/revision/RevisionCenterPage';
 import { ProgressPage } from '../features/progress/ProgressPage';
+import { SettingsPage } from '../features/settings/SettingsPage';
+import { AskPage } from '../features/ask/AskPage';
+import { KnowledgeGraphPage } from '../features/knowledge/KnowledgeGraphPage';
 
 const lazyPage = (load: () => Promise<{ default: React.ComponentType }>) => {
   const Component = lazy(load);
@@ -34,6 +37,32 @@ function NotFound(): ReactNode {
   );
 }
 
+/** Friendly error screen instead of a stack trace (details stay in the console). */
+function RouteError() {
+  const error = useRouteError();
+  console.error(error);
+  const message = isRouteErrorResponse(error) ? `${error.status} ${error.statusText}` : 'Something went wrong while showing this page.';
+  return (
+    <div className="min-h-full flex items-center justify-center p-6">
+      <EmptyState
+        title="This page hit a problem"
+        action={
+          <div className="flex gap-3">
+            <button className="text-primary" onClick={() => window.location.reload()}>
+              Reload
+            </button>
+            <a href="/" className="text-primary">
+              Dashboard
+            </a>
+          </div>
+        }
+      >
+        {message} Your data is safe.
+      </EmptyState>
+    </div>
+  );
+}
+
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/register', element: <RegisterPage /> },
@@ -42,6 +71,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppLayout />,
+    errorElement: <RouteError />,
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'library', element: <LibraryPage /> },
@@ -57,6 +87,9 @@ export const router = createBrowserRouter([
       { path: 'presentations', element: <PresentationsPage /> },
       { path: 'revision', element: <RevisionCenterPage /> },
       { path: 'progress', element: <ProgressPage /> },
+      { path: 'settings', element: <SettingsPage /> },
+      { path: 'ask', element: <AskPage /> },
+      { path: 'knowledge-graph', element: <KnowledgeGraphPage /> },
       { path: '*', element: <NotFound /> },
     ],
   },

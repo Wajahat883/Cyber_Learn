@@ -1,5 +1,68 @@
 # Cyber_Learn
 
+## Run the app
+
+CyberLearn AI turns pasted notes or uploaded documents (PDF, DOCX, TXT, Markdown) into a structured lesson, validated diagrams, illustrations, an animated narrated presentation, flashcards, quizzes and exports. Build progress is tracked in [Setupimplementation.md](Setupimplementation.md) (Implementation Progress Tracker).
+
+### Option A — everything in Docker (recommended)
+
+Requires Docker with Compose v2.24 or newer (on Kali/Debian: `sudo apt install docker.io docker-compose`, or Docker's `docker-ce` + `docker-compose-plugin`; then add yourself to the `docker` group and log in again).
+
+```bash
+cp .env.example .env          # optional: add AI provider keys (see below)
+docker compose up --build -d  # MongoDB, Redis, API, worker, web
+# open http://localhost:8080
+docker compose logs -f api worker
+docker compose down           # stop (data stays in Docker volumes)
+```
+
+Optional S3-compatible storage with MinIO instead of the local volume:
+`STORAGE_DRIVER=s3 docker compose --profile s3 up --build -d` (MinIO console on http://localhost:9001).
+
+### Option B — local development
+
+Requires Node.js 20.19+ (24 recommended) and npm 11.
+
+```bash
+npm install
+cp .env.example .env
+docker compose -f docker-compose.dev.yml up -d   # MongoDB + Redis only
+npm run dev                                      # API :4000 + web :5173 (open http://localhost:5173)
+```
+
+Without Redis (`REDIS_URL=` empty) background jobs run inside the API process.
+
+### AI providers
+
+Everything works offline by default (`AI_TEXT_PROVIDER=mock`: lessons are organised from your own sentences, placeholder illustrations, browser speech). For full AI generation set in `.env`:
+
+| Purpose | Settings |
+| --- | --- |
+| OpenCode Zen / OpenAI / OpenRouter / Ollama | `AI_TEXT_PROVIDER=openai-compatible`, `AI_TEXT_BASE_URL`, `AI_TEXT_API_KEY`, `AI_TEXT_MODEL` |
+| Claude | `AI_TEXT_PROVIDER=anthropic`, `AI_TEXT_API_KEY` (model defaults to `claude-opus-5-5`) |
+| Images | `AI_IMAGE_PROVIDER=openai-compatible` + base URL, key, model |
+| Narration audio | `AI_SPEECH_PROVIDER=openai-compatible` + base URL, key, model, voice |
+
+Keys stay on the server and are never sent to the browser.
+
+### Checks
+
+```bash
+npm run typecheck   # shared, backend, frontend
+npm test            # 67 tests: schemas, API (in-memory MongoDB), player clock
+npm run build
+```
+
+### Layout
+
+```text
+packages/shared   Zod schemas shared by API and UI (lesson, diagram, presentation manifest, quiz…)
+backend           Express 5 + Mongoose + BullMQ API and worker (src/server.ts, src/worker.ts)
+frontend          React 19 + Vite + Tailwind 4 (served by nginx in Docker)
+```
+
+---
+
 # CyberLearn  — Complete Step-by-Step Implementation Plan & Feature Ideas
 
 This document analyzes your `CyberLearn .md` specification (covering both the English technical architecture and the Roman Urdu universal learning workspace expansion) and turns it into an ordered, actionable step-by-step build guide, followed by high-value ideas and improvements for the platform.

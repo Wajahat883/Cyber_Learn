@@ -111,3 +111,11 @@ export async function closeQueues() {
   await Promise.all([...queues.values()].map((q) => q.close()));
   queues.clear();
 }
+
+/** Queue depth and dead-letter (failed) counts for operational monitoring. */
+export async function queueHealth() {
+  if (!useRedis) return { driver: 'in-process', inflight: inflight.size };
+  const out: Record<string, Record<string, number>> = {};
+  for (const name of ['generation', 'media'] as const) out[name] = await queue(name).getJobCounts('waiting', 'active', 'delayed', 'failed');
+  return { driver: 'bullmq', queues: out };
+}

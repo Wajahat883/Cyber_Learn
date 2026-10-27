@@ -5,15 +5,19 @@ import cors from 'cors';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
 import { pinoHttp } from 'pino-http';
+import { queueHealth } from './jobs/queues.js';
 import { env } from './config/env.js';
 import { authenticate } from './middleware/authenticate.js';
 import { csrfProtection } from './middleware/csrf.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { apiLimiter } from './middleware/rateLimit.js';
+import { accountRouter } from './modules/account/account.routes.js';
 import { askRouter } from './modules/ask/ask.routes.js';
 import { assetsRouter } from './modules/assets/assets.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
+import { exportsRouter } from './modules/exports/exports.routes.js';
 import { generationsRouter } from './modules/generations/generations.routes.js';
+import { knowledgeRouter } from './modules/knowledge/knowledge.routes.js';
 import { lessonsRouter } from './modules/lessons/lessons.routes.js';
 import { presentationsRouter } from './modules/presentations/presentations.routes.js';
 import { progressRouter } from './modules/progress/progress.routes.js';
@@ -44,12 +48,14 @@ export function createApp() {
   );
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
   app.use(cors({ origin: env.allowedOrigins, credentials: true }));
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '4mb' }));
   app.use(cookieParser());
 
   const api = Router();
-  api.get('/health', (_req, res) => {
-    res.json({ status: 'ok', database: mongoose.connection.readyState === 1 ? 'up' : 'down', time: new Date().toISOString() });
+  api.get('/health', async (_req, res) => {
+    const database = mongoose.connection.readyState === 1 ? 'up' : 'down';
+    const jobs = await queueHealth().catch(() => ({ driver: 'unavailable' }));
+    res.status(database === 'up' ? 200 : 503).json({ status: database === 'up' ? 'ok' : 'degraded', database, jobs, time: new Date().toISOString() });
   });
 
   api.use(apiLimiter);
@@ -69,6 +75,9 @@ export function createApp() {
   secured.use(assetsRouter);
   secured.use(askRouter);
   secured.use(revisionRouter);
+  secured.use(exportsRouter);
+  secured.use(accountRouter);
+  secured.use(knowledgeRouter);
   api.use(secured);
 
   app.use('/api/v1', api);

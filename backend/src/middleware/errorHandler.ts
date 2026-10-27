@@ -29,6 +29,10 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     code = 'VALIDATION_ERROR';
     message = 'Data validation failed';
     details = Object.fromEntries(Object.entries(err.errors).map(([k, v]) => [k, v.message]));
+  } else if (err instanceof mongoose.Error.CastError) {
+    status = 400;
+    code = 'BAD_REQUEST';
+    message = `Invalid ${err.path}`;
   } else if (err?.type === 'entity.too.large') {
     status = 413;
     code = 'PAYLOAD_TOO_LARGE';
