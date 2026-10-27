@@ -1,25 +1,26 @@
-# Cyber_Learn_With_AI
-# CyberLearn AI — Complete Step-by-Step Implementation Plan & Feature Ideas
+# Cyber_Learn
 
-This document analyzes your `CyberLearn AI.md` specification (covering both the English technical architecture and the Roman Urdu universal learning workspace expansion) and turns it into an ordered, actionable step-by-step build guide, followed by high-value ideas and improvements for the platform.
+# CyberLearn  — Complete Step-by-Step Implementation Plan & Feature Ideas
+
+This document analyzes your `CyberLearn .md` specification (covering both the English technical architecture and the Roman Urdu universal learning workspace expansion) and turns it into an ordered, actionable step-by-step build guide, followed by high-value ideas and improvements for the platform.
 
 ---
 
-# Part 1: Architectural Alignment & Key Observations from `CyberLearn AI.md`
+# Part 1: Architectural Alignment & Key Observations from `CyberLearn .md`
 
-Before writing code, there are three important nuances in your `CyberLearn AI.md` file to unify from Day 1:
+Before writing code, there are three important nuances in your `CyberLearn .md` file to unify from Day 1:
 
 1. **Unifying `Projects` with Dynamic `Subjects` & `LearningPaths`:**
-   - The first half of `CyberLearn AI.md` structures work around **Projects → Sources → Lessons**, while the second half introduces **Dynamic Subjects & Learning Paths** (SOC & Blue Team, Penetration Testing, Cloud Security, AI Security, University Courses) so new subjects never require code changes.
+   - The first half of `CyberLearn .md` structures work around **Projects → Sources → Lessons**, while the second half introduces **Dynamic Subjects & Learning Paths** (SOC & Blue Team, Penetration Testing, Cloud Security, AI Security, University Courses) so new subjects never require code changes.
    - **Solution:** Make `Subject` (top-level category/workspace) and `LearningPath` (ordered modules/milestones) parent containers of `Projects` (or `Lessons`), stored dynamically in MongoDB.
 2. **Central Canonical Data Model:**
    - Every downstream feature—Lesson Viewer, React Flow Diagrams, Animated Presentation Player, Narration, Flashcards, Quizzes, and PDF/PPTX Exports—must read from a **single validated JSON schema** (`Lesson` + `PresentationManifest`), never ad-hoc unvalidated AI text.
-3. **File Hygiene Note on `CyberLearn AI.md`:**
-   - Lines `1–1791` and `1792–3582` in `CyberLearn AI.md` are duplicated, and lines `3583–4196` contain your Roman Urdu expansion (Knowledge Graph, Ask My Notes, Dynamic Subjects, OpenCode API backend integration). This implementation guide merges both into one cohesive roadmap.
+3. **File Hygiene Note on `CyberLearn .md`:**
+   - Lines `1–1791` and `1792–3582` in `CyberLearn .md` are duplicated, and lines `3583–4196` contain your Roman Urdu expansion (Knowledge Graph, Ask My Notes, Dynamic Subjects, OpenCode API backend integration). This implementation guide merges both into one cohesive roadmap.
 
 ---
 
-# Part 2: Arranged Step-by-Step Guide to Creating CyberLearn AI
+# Part 2: Arranged Step-by-Step Guide to Creating CyberLearn 
 
 The steps below are arranged in **strict dependency order** so that every step builds directly on the previous one and you have a working, testable application at the end of every phase.
 
@@ -175,7 +176,7 @@ Create the backend `PresentationAssembler` that compiles lesson sections and dia
 
 ---
 
-# Part 3: High-Impact Ideas & Suggestions for CyberLearn AI
+# Part 3: High-Impact Ideas & Suggestions for CyberLearn 
 
 Based on your focus on **Cybersecurity (SOC, HTB CDSA, SIEM, Penetration Testing, Cloud/AI Security)** and **Bilingual (English + Roman Urdu) interactive learning**, here are high-value feature ideas that fit naturally into your architecture:
 
