@@ -12,6 +12,100 @@
 
 ---
 
+# ✅ Implementation Progress Tracker
+
+Steps are built in order. `[x]` ✅ = completed and verified, `[ ]` = not done yet.
+Phase 0 (Docker) was added on top of the spec so the whole application runs locally in containers.
+
+## Phase 0 — Monorepo & Docker (added)
+
+- [x] ✅ 0.1 npm-workspaces monorepo (`packages/shared`, `backend`, `frontend`)
+- [x] ✅ 0.2 Shared Zod schemas (analysis, lesson, diagram, presentation manifest, quiz, flashcard)
+- [x] ✅ 0.3 `.env.example` with empty placeholders, `.gitignore` excluding `.env`
+- [ ] 0.4 Backend Dockerfile (API + worker) and frontend Dockerfile (nginx)
+- [ ] 0.5 `docker-compose.yml` running MongoDB, Redis, API, worker, frontend (+ optional MinIO)
+- [ ] 0.6 `docker-compose.dev.yml` for infrastructure-only local development
+
+## Phase 1 — Foundation
+
+- [ ] 1.1 Express API with `/api/v1`, helmet, CORS, rate limits, central error format
+- [ ] 1.2 MongoDB connection + Mongoose models (all collections from section 8)
+- [ ] 1.3 Authentication (register, login, logout, me, forgot/reset password), HTTP-only cookies + CSRF
+- [ ] 1.4 Dynamic Subjects & Learning Paths (Roman Urdu section 3)
+- [ ] 1.5 Projects CRUD with ownership checks, search and filters
+- [ ] 1.6 Paste-text sources (normalize + chunk)
+- [ ] 1.7 React app shell: dark design tokens, collapsible sidebar, top navigation
+- [ ] 1.8 Login / Register screens
+- [ ] 1.9 Dashboard (real stats, empty states)
+- [ ] 1.10 Create Lesson screen (paste input + preferences)
+- [ ] 1.11 My Library (search, filter, sort, favorite, duplicate, rename, delete)
+- [ ] 1.12 Acceptance: create account → paste material → save project → reopen it
+
+## Phase 2 — AI learning content
+
+- [ ] 2.1 PDF / DOCX / TXT / Markdown upload with magic-byte validation and extraction
+- [ ] 2.2 Object storage abstraction (local volume or S3/MinIO)
+- [ ] 2.3 AI provider abstraction (mock, OpenAI-compatible / OpenCode, Anthropic)
+- [ ] 2.4 Background jobs (BullMQ + Redis, inline fallback), retries, cancel, per-user limits
+- [ ] 2.5 Content analyzer with schema validation + repair step
+- [ ] 2.6 Content Analysis Preview screen (edit title, remove sections)
+- [ ] 2.7 Structured lesson generator with source references
+- [ ] 2.8 Generation Workspace with live SSE progress and per-stage retry
+- [ ] 2.9 Lesson Viewer (outline, sections, key concepts, search, bookmarks, mark understood)
+- [ ] 2.10 Lesson editing (Tiptap) with autosave
+- [ ] 2.11 Acceptance: pasted content becomes a structured, editable lesson
+
+## Phase 3 — Diagrams and visuals
+
+- [ ] 3.1 Visual planner
+- [ ] 3.2 Diagram generator with node/edge validation
+- [ ] 3.3 React Flow diagram renderer + Diagram Explorer (zoom, select node, replay, SVG/PNG download)
+- [ ] 3.4 Image-generation adapter with fallback illustration
+- [ ] 3.5 Asset library + AI Image Gallery (regenerate, download, usage)
+- [ ] 3.6 Acceptance: lesson contains validated diagrams and illustrations
+
+## Phase 4 — Animated presentation
+
+- [ ] 4.1 Presentation manifest assembler (7 presentation types)
+- [ ] 4.2 Slide layouts on a 16:9 stage
+- [ ] 4.3 Presentation clock / timeline engine (reveal, highlight, moveAlongPath)
+- [ ] 4.4 Controls: play/pause, prev/next, replay, seek, speed, fullscreen, jump, restart
+- [ ] 4.5 Acceptance: play, pause and resume without losing synchronization
+
+## Phase 5 — Narration
+
+- [ ] 5.1 Narration script generation from slide data
+- [ ] 5.2 TTS integration (provider audio or browser speech fallback)
+- [ ] 5.3 Captions + transcript panel
+- [ ] 5.4 Narration-to-animation synchronization
+- [ ] 5.5 Acceptance: speech and visuals follow the same lesson plan
+
+## Phase 6 — Revision system
+
+- [ ] 6.1 Flashcards with spaced repetition (SM-2)
+- [ ] 6.2 Quizzes: MCQ, true/false, short answer, scenario / log analysis
+- [ ] 6.3 Answer explanations and mistake review
+- [ ] 6.4 Progress tracking + Learning Progress screen
+- [ ] 6.5 Revision Center (due items, weak topics)
+- [ ] 6.6 Acceptance: user can test understanding and revisit weak topics
+
+## Phase 7 — Export and polish
+
+- [ ] 7.1 PDF notes export
+- [ ] 7.2 PPTX export with speaker notes
+- [ ] 7.3 Markdown export / data backup
+- [ ] 7.4 Presentation version history
+- [ ] 7.5 Settings screen (profile, preferences, usage, storage, data export, account deletion)
+- [ ] 7.6 Mobile layout polish, operational logging, security review
+
+## Phase 8 — Universal workspace extras (Roman Urdu sections 7–8)
+
+- [ ] 8.1 Ask My Notes (grounded answers with source references)
+- [ ] 8.2 Knowledge Graph across lessons and subjects
+- [ ] 8.3 Final end-to-end check against section 21 "Definition of Done"
+
+---
+
 # 1. Project Vision
 
 CyberLearn AI is a personal AI-powered learning platform that converts any study material into an interactive multimedia learning experience.
