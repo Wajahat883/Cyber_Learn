@@ -256,7 +256,9 @@ export function AppLayout() {
   const [collapsed, setCollapsed] = useLocalStorage('cl.sidebarCollapsed', false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => setMobileOpen(false), [location.pathname]);
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;

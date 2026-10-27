@@ -211,7 +211,7 @@ export function DiagramExplorerPage() {
             <span className="text-xs text-muted ml-auto">{replay.step !== null ? `Step ${Math.min(replay.step, replay.order.length)} of ${replay.order.length}` : 'Scroll to zoom · drag to pan · click a node'}</span>
           </div>
           <div className="h-[560px]">
-            <DiagramView diagram={diagram} selectedId={focus} onSelect={setSelected} highlightIds={highlight} visibleIds={replay.visible} minimap />
+            <DiagramView diagram={diagram} selectedId={focus} onSelect={setSelected} highlightIds={highlight} visibleIds={replay.visible} />
           </div>
         </Card>
 

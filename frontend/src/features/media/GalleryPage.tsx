@@ -41,7 +41,11 @@ function ImageCard({ asset, lessonId, topic }: { asset: GalleryAsset; lessonId: 
       <div className="p-4 space-y-2 flex-1 flex flex-col">
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-semibold">{topic}</h3>
-          {asset.generationMetadata.fallback ? <Badge tone="warning">placeholder</Badge> : <Badge tone="primary">{asset.generationMetadata.provider || 'generated'}</Badge>}
+          {asset.generationMetadata.fallback ? (
+            <Badge tone="warning">fallback — provider failed</Badge>
+          ) : (
+            <Badge tone="primary">{asset.generationMetadata.provider === 'placeholder' ? 'offline art' : asset.generationMetadata.provider || 'generated'}</Badge>
+          )}
         </div>
         {asset.generationMetadata.prompt && (
           <details className="text-xs text-muted">

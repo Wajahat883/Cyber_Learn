@@ -141,7 +141,9 @@ export function LibraryPage() {
   const tag = params.get('tag') ?? '';
   const page = Number(params.get('page') ?? 1);
 
-  useEffect(() => setSearch(q), [q]);
+  useEffect(() => {
+    setSearch(q);
+  }, [q]);
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);

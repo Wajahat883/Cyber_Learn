@@ -57,12 +57,12 @@ Phase 0 (Docker) was added on top of the spec so the whole application runs loca
 
 ## Phase 3 — Diagrams and visuals
 
-- [ ] 3.1 Visual planner
-- [ ] 3.2 Diagram generator with node/edge validation
-- [ ] 3.3 React Flow diagram renderer + Diagram Explorer (zoom, select node, replay, SVG/PNG download)
-- [ ] 3.4 Image-generation adapter with fallback illustration
-- [ ] 3.5 Asset library + AI Image Gallery (regenerate, download, usage)
-- [ ] 3.6 Acceptance: lesson contains validated diagrams and illustrations
+- [x] ✅ 3.1 Visual planner
+- [x] ✅ 3.2 Diagram generator with node/edge validation
+- [x] ✅ 3.3 React Flow diagram renderer + Diagram Explorer (zoom, select node, replay, SVG/PNG download)
+- [x] ✅ 3.4 Image-generation adapter with fallback illustration
+- [x] ✅ 3.5 Asset library + AI Image Gallery (regenerate, download, usage)
+- [x] ✅ 3.6 Acceptance: lesson contains validated diagrams and illustrations
 
 ## Phase 4 — Animated presentation
 

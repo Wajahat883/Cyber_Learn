@@ -12,6 +12,8 @@ import { GenerationPage } from '../features/generation/GenerationPage';
 import { LessonViewerPage } from '../features/lessons/LessonViewerPage';
 import { DiagramExplorerPage } from '../features/diagrams/DiagramExplorerPage';
 import { GalleryPage } from '../features/media/GalleryPage';
+import { PlayerPage } from '../features/presentations/PlayerPage';
+import { PresentationsPage } from '../features/presentations/PresentationsPage';
 
 const lazyPage = (load: () => Promise<{ default: React.ComponentType }>) => {
   const Component = lazy(load);
@@ -49,6 +51,8 @@ export const router = createBrowserRouter([
       { path: 'lessons/:id/diagrams', element: <DiagramExplorerPage /> },
       { path: 'lessons/:id/diagrams/:diagramId', element: <DiagramExplorerPage /> },
       { path: 'lessons/:id/gallery', element: <GalleryPage /> },
+      { path: 'lessons/:id/present', element: <PlayerPage /> },
+      { path: 'presentations', element: <PresentationsPage /> },
       { path: '*', element: <NotFound /> },
     ],
   },

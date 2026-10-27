@@ -125,7 +125,10 @@ function extractKeyTerms(text: string): KeyTerm[] {
     if (m && !STOP.has(m[1])) terms.set(m[1], m[1]);
   }
 
-  return [...terms.entries()].slice(0, 20).map(([key, label]) => ({ term: label, definition: clip(definitionFor(key), 600) }));
+  // Drop fragments of a longer known term ("Event Management" inside "SIEM (Security Information and Event Management)").
+  const labels = [...terms.values()];
+  const kept = [...terms.entries()].filter(([key, label]) => !labels.some((other) => other !== label && other.length > key.length && other.includes(key) && !/^[A-Z]{2,7}s?$/.test(key)));
+  return kept.slice(0, 20).map(([key, label]) => ({ term: label, definition: clip(definitionFor(key), 600) }));
 }
 
 /** Short searchable form of a term ("SIEM (Security Information ...)" -> "SIEM"). */
