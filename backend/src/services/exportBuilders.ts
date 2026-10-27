@@ -375,7 +375,7 @@ export async function buildPptx(manifest: PresentationManifest, extras: ExportEx
         fontFace: 'Consolas',
         fontSize: 12,
         color: FG,
-        fill: { color: '05080F' },
+        fill: { color: '070B16' },
         valign: 'top',
         margin: 12,
       });

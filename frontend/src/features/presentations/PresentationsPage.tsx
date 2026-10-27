@@ -5,6 +5,7 @@ import { PageHeader } from '../../components/ui/Card';
 import { ButtonLink } from '../../components/ui/Button';
 import { EmptyState, PageLoader, StatusBadge } from '../../components/ui/Feedback';
 import { timeAgo } from '../../utils/format';
+import { LibraryTabs } from '../../components/layout/hubs';
 
 export interface LessonSummary {
   _id: string;
@@ -28,7 +29,8 @@ export function PresentationsPage() {
   const items = (data ?? []).filter((l) => l.presentation);
   return (
     <div>
-      <PageHeader eyebrow="Presentations" title="Animated presentations" description="Every generated lesson comes with an animated, narrated presentation." />
+      <PageHeader title="Library" description="Every generated lesson comes with an animated, narrated presentation." />
+      <LibraryTabs active="presentations" />
       {!items.length ? (
         <EmptyState icon={<MonitorPlay className="h-10 w-10" />} title="No presentations yet" action={<ButtonLink to="/create">Create a lesson</ButtonLink>}>
           Generate a lesson to get its presentation.
@@ -36,10 +38,11 @@ export function PresentationsPage() {
       ) : (
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {items.map((l) => (
-            <div key={l._id} className="rounded-xl border border-border bg-surface p-4 flex flex-col">
-              <div className="aspect-video rounded-lg bg-[radial-gradient(ellipse_at_top_left,#16244a,#0b1020_60%)] border border-border p-4 flex flex-col justify-end mb-3">
-                <p className="text-xs uppercase tracking-widest text-primary">{l.subject || 'Lesson'}</p>
-                <p className="font-bold text-lg leading-tight line-clamp-2">{l.title}</p>
+            <div key={l._id} className="rounded-2xl border border-border bg-surface p-4 flex flex-col shadow-card">
+              {/* Slide thumbnail: the presentation stage is dark in both themes. */}
+              <div className="aspect-video rounded-xl bg-stage bg-[radial-gradient(ellipse_at_top_left,#16244a,#0b1020_60%)] p-4 flex flex-col justify-end mb-3 text-white">
+                <p className="text-[11px] uppercase tracking-widest text-[#2dd4bf]">{l.subject || 'Lesson'}</p>
+                <p className="font-display font-bold text-lg leading-tight line-clamp-2">{l.title}</p>
               </div>
               <div className="flex items-center justify-between text-sm text-muted">
                 <span>

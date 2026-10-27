@@ -11,7 +11,7 @@ import {
   type PresentationManifest,
 } from '@cyberlearn/shared';
 import { generateExamples, generateSection, relevantChunks } from '../../ai/lessonGenerator.js';
-import { textProvider } from '../../ai/providers/index.js';
+import { textProviderFor } from '../../ai/providers/userProviders.js';
 import { AiOutputError, AiProviderError } from '../../ai/types.js';
 import { findOwned } from '../../middleware/authorize.js';
 import { aiLimiter } from '../../middleware/rateLimit.js';
@@ -137,7 +137,7 @@ lessonsRouter.post('/lessons/:id/sections/:sectionId/regenerate', aiLimiter, val
   const analysis = ctx.analysis ?? { title: lesson.title, sections: (lesson.sections as LessonSection[]).map((s) => ({ ...s, concepts: s.keyConcepts })) };
   let written: LessonSection;
   try {
-    ({ section: written } = await generateSection(textProvider(), { section: ctx.planned, chunks: ctx.chunks, analysis: analysis as never, preferences: ctx.preferences }));
+    ({ section: written } = await generateSection(await textProviderFor(ownerId), { section: ctx.planned, chunks: ctx.chunks, analysis: analysis as never, preferences: ctx.preferences }));
   } catch (err) {
     aiError(err);
   }
@@ -155,7 +155,7 @@ lessonsRouter.post('/lessons/:id/sections/:sectionId/examples', aiLimiter, valid
   try {
     ({
       data: { examples },
-    } = await generateExamples(textProvider(), { section: ctx.section, chunks: ctx.chunks, preferences: ctx.preferences }));
+    } = await generateExamples(await textProviderFor(ownerId), { section: ctx.section, chunks: ctx.chunks, preferences: ctx.preferences }));
   } catch (err) {
     aiError(err);
   }

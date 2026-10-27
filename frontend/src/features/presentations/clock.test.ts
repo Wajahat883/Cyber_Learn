@@ -32,7 +32,7 @@ const slide: Slide = {
     { atMs: 3000, type: 'highlight', targetId: 'siem', durationMs: 1000 },
     { atMs: 4000, type: 'moveAlongPath', targetId: 'e1', pathId: 'e1', durationMs: 2000 },
   ],
-  narration: { text: '', captions: [{ startMs: 0, endMs: 2000, text: 'Hello' }], timing: 'estimated' },
+  narration: { text: '', captions: [{ startMs: 0, endMs: 2000, text: 'Hello' }], words: [], timing: 'estimated' },
   speakerNotes: '',
 };
 

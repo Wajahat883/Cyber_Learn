@@ -39,7 +39,7 @@ export function Citations({ citations }: { citations: AskResponse['citations'] }
 }
 
 /** "Ask AI about this section": answers grounded in the lesson's own source material. */
-export function AskPanel({ lessonId, sectionId, sectionTitle }: { lessonId: string; sectionId?: string; sectionTitle?: string }) {
+export function AskPanel({ lessonId, sectionId, sectionTitle, concepts = [] }: { lessonId: string; sectionId?: string; sectionTitle?: string; concepts?: string[] }) {
   const [question, setQuestion] = useState('');
   const [history, setHistory] = useState<{ q: string; a: AskResponse }[]>([]);
   const ask = useMutation({
@@ -58,6 +58,28 @@ export function AskPanel({ lessonId, sectionId, sectionTitle }: { lessonId: stri
       <p className="text-sm font-semibold flex items-center gap-2 mb-2">
         <MessageSquareText className="h-4 w-4 text-primary" /> Ask about {sectionTitle ? `“${sectionTitle}”` : 'this lesson'}
       </p>
+      {/* Quick actions (design.md §2.3.4): shortcuts for the most common follow-up questions. */}
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {(() => {
+          // Naming the section's key concepts keeps the shortcut grounded in the right part of the notes.
+          const about = [sectionTitle && `"${sectionTitle}"`, concepts.length ? `(${concepts.slice(0, 4).join(', ')})` : ''].filter(Boolean).join(' ') || 'this';
+          return [
+          { label: 'Explain again', question: `Explain ${about} again in simpler words.` },
+          { label: 'Give an example', question: `Give me an example of ${about} from my notes.` },
+          { label: 'Go deeper', question: `Go deeper into ${about}: how does it work in detail?` },
+          ];
+        })().map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            disabled={ask.isPending}
+            onClick={() => ask.mutate(action.question)}
+            className="rounded-full border border-border px-2.5 py-1 text-xs text-muted hover:border-primary hover:text-primary disabled:opacity-50"
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
       <form onSubmit={submit} className="flex gap-2">
         <input
           value={question}
@@ -65,7 +87,7 @@ export function AskPanel({ lessonId, sectionId, sectionTitle }: { lessonId: stri
           placeholder="Ask a follow-up question…"
           aria-label="Question"
           maxLength={1000}
-          className="flex-1 min-w-0 h-9 rounded-lg border border-border bg-bg/60 px-3 text-sm focus:border-primary focus:outline-none"
+          className="flex-1 min-w-0 h-9 rounded-lg border border-border bg-surface px-3 text-sm focus:border-primary focus:outline-none"
         />
         <Button type="submit" size="icon" loading={ask.isPending} disabled={question.trim().length < 3} aria-label="Ask">
           {!ask.isPending && <Send className="h-4 w-4" />}

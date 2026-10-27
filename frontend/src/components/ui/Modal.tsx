@@ -17,7 +17,7 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
       ref={ref}
       onClose={onClose}
       onClick={(e) => e.target === ref.current && onClose()}
-      className={`m-auto w-[calc(100%-2rem)] ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl border border-border bg-surface text-text p-0 backdrop:bg-black/60 backdrop:backdrop-blur-sm`}
+      className={`m-auto w-[calc(100%-2rem)] ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-2xl border border-border bg-surface text-text p-0 shadow-pop backdrop:bg-black/40 backdrop:backdrop-blur-sm`}
     >
       {open && (
         <div className="flex flex-col max-h-[85vh]">

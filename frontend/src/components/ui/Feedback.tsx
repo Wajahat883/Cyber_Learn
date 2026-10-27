@@ -17,8 +17,8 @@ export function PageLoader({ label = 'Loading…' }: { label?: string }) {
 
 export function EmptyState({ icon, title, children, action }: { icon?: ReactNode; title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center gap-3 py-12 px-6 border border-dashed border-border rounded-xl bg-surface/40">
-      {icon && <div className="text-primary/80">{icon}</div>}
+    <div className="flex flex-col items-center justify-center text-center gap-3 py-14 px-6 border border-dashed border-border rounded-2xl bg-surface/60">
+      {icon && <div className="h-14 w-14 rounded-2xl bg-primary-soft text-primary flex items-center justify-center [&_svg]:h-7 [&_svg]:w-7">{icon}</div>}
       <h3 className="font-semibold text-lg">{title}</h3>
       {children && <div className="text-muted max-w-md text-sm">{children}</div>}
       {action}
@@ -28,7 +28,7 @@ export function EmptyState({ icon, title, children, action }: { icon?: ReactNode
 
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   return (
-    <div role="alert" className="flex items-start gap-3 rounded-xl border border-error/40 bg-error/10 p-4 text-sm">
+    <div role="alert" className="flex items-start gap-3 rounded-xl border border-error/30 bg-error/5 p-4 text-sm">
       <XCircle className="h-5 w-5 text-error shrink-0 mt-0.5" />
       <div className="flex-1">
         <p className="text-error font-medium">{errorMessage(error)}</p>
@@ -44,13 +44,13 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
 
 export function Alert({ tone = 'warning', children, title }: { tone?: 'warning' | 'info' | 'success' | 'error'; title?: string; children: ReactNode }) {
   const tones = {
-    warning: 'border-warning/40 bg-warning/10 text-warning',
-    info: 'border-primary/40 bg-primary/10 text-primary',
-    success: 'border-success/40 bg-success/10 text-success',
-    error: 'border-error/40 bg-error/10 text-error',
+    warning: 'border-warning/30 bg-warning/5 text-warning',
+    info: 'border-primary/30 bg-primary-soft text-primary',
+    success: 'border-success/30 bg-success/5 text-success',
+    error: 'border-error/30 bg-error/5 text-error',
   };
   return (
-    <div className={cn('rounded-lg border p-3 text-sm flex gap-2', tones[tone])}>
+    <div className={cn('rounded-xl border p-3 text-sm flex gap-2.5', tones[tone])}>
       <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
       <div className="text-text/90">
         {title && <p className="font-semibold mb-0.5">{title}</p>}
@@ -62,14 +62,14 @@ export function Alert({ tone = 'warning', children, title }: { tone?: 'warning' 
 
 export function Badge({ children, tone = 'default', className }: { children: ReactNode; tone?: 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'error'; className?: string }) {
   const tones = {
-    default: 'bg-surface-2 text-muted border-border',
-    primary: 'bg-primary/10 text-primary border-primary/30',
-    secondary: 'bg-secondary/10 text-secondary border-secondary/30',
-    success: 'bg-success/10 text-success border-success/30',
-    warning: 'bg-warning/10 text-warning border-warning/30',
-    error: 'bg-error/10 text-error border-error/30',
+    default: 'bg-surface-2 text-muted',
+    primary: 'bg-primary-soft text-primary',
+    secondary: 'bg-secondary-soft text-secondary',
+    success: 'bg-success/10 text-success',
+    warning: 'bg-warning/10 text-warning',
+    error: 'bg-error/10 text-error',
   };
-  return <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium', tones[tone], className)}>{children}</span>;
+  return <span className={cn('inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium', tones[tone], className)}>{children}</span>;
 }
 
 const STATUS_TONES: Record<string, 'default' | 'primary' | 'success' | 'warning' | 'error' | 'secondary'> = {

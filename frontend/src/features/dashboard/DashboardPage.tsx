@@ -1,11 +1,10 @@
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, BookOpen, CalendarClock, CheckCircle2, Flame, GraduationCap, Loader, MonitorPlay, Play, Plus, Sparkles } from 'lucide-react';
+import { ArrowRight, BookOpen, FileText, Flame, Layers, Loader2, Play, Sparkles, Target, UploadCloud } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useAuth } from '../auth/AuthContext';
-import { Card, CardTitle, PageHeader, Stat } from '../../components/ui/Card';
 import { ButtonLink } from '../../components/ui/Button';
-import { EmptyState, ErrorState, PageLoader, StatusBadge } from '../../components/ui/Feedback';
+import { ErrorState, PageLoader, StatusBadge } from '../../components/ui/Feedback';
 import type { Generation, Project, WeakTopic } from '../../types/models';
 import { timeAgo } from '../../utils/format';
 
@@ -19,6 +18,65 @@ interface DashboardData {
   weakTopics: WeakTopic[];
 }
 
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+}
+
+function ProgressBar({ value }: { value: number }) {
+  return (
+    <div className="h-1.5 w-full rounded-full bg-surface-2 overflow-hidden" role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={100}>
+      <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${value}%` }} />
+    </div>
+  );
+}
+
+/** First-run home: three clear ways to start instead of empty statistics. */
+function Welcome({ name }: { name: string }) {
+  const steps = [
+    { icon: FileText, title: 'Paste or upload', text: 'Notes, a PDF, DOCX, TXT or Markdown file.' },
+    { icon: Sparkles, title: 'Review the plan', text: 'Check the sections before anything is generated.' },
+    { icon: Play, title: 'Learn and revise', text: 'Lesson, animated slides, flashcards and quizzes.' },
+  ];
+  return (
+    <div className="space-y-8">
+      <div className="rounded-3xl border border-border bg-surface p-8 sm:p-12 shadow-card relative overflow-hidden">
+        <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary-soft blur-2xl" aria-hidden />
+        <div className="relative max-w-xl">
+          <p className="text-sm font-medium text-primary mb-3">Welcome, {name}</p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight leading-tight">Turn your study notes into a lesson you can watch, read and practise.</h1>
+          <p className="text-muted mt-4 leading-relaxed">Start your first learning project — statistics appear here once you start studying. Nothing is shown until it is real.</p>
+          <div className="flex flex-wrap gap-3 mt-8">
+            <ButtonLink to="/create" size="lg" icon={<Sparkles className="h-4 w-4" />}>
+              Create your first lesson
+            </ButtonLink>
+            <ButtonLink to="/create" size="lg" variant="outline" icon={<UploadCloud className="h-4 w-4" />}>
+              Upload a document
+            </ButtonLink>
+          </div>
+        </div>
+      </div>
+      <ol className="grid md:grid-cols-3 gap-4">
+        {steps.map((s, i) => {
+          const Icon = s.icon;
+          return (
+            <li key={s.title} className="rounded-2xl border border-border bg-surface p-5 shadow-card">
+              <div className="flex items-center gap-3">
+                <span className="h-9 w-9 rounded-xl bg-surface-2 flex items-center justify-center text-primary">
+                  <Icon className="h-[18px] w-[18px]" />
+                </span>
+                <span className="text-xs font-semibold text-muted">STEP {i + 1}</span>
+              </div>
+              <p className="font-semibold mt-4">{s.title}</p>
+              <p className="text-sm text-muted mt-1">{s.text}</p>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
 export function DashboardPage() {
   const { user } = useAuth();
   const { data, isLoading, error, refetch } = useQuery({
@@ -29,186 +87,184 @@ export function DashboardPage() {
 
   if (isLoading) return <PageLoader />;
   if (error || !data) return <ErrorState error={error} onRetry={() => refetch()} />;
+  const name = user?.displayName?.split(' ')[0] ?? 'there';
+  if (data.stats.totalProjects === 0) return <Welcome name={name} />;
 
   const { stats } = data;
-  const isNew = stats.totalProjects === 0;
+  const cont = data.continueLearning;
+  // Nothing studied yet: suggest the newest lesson that is ready.
+  const startHere = data.recentProjects.find((p) => p.lessonId && p.status.content === 'ready');
+  const strip = [
+    { label: 'Lessons created', value: stats.totalLessons, to: '/library' },
+    { label: 'Presentations', value: stats.totalPresentations, to: '/presentations' },
+    { label: 'Completed', value: stats.completedLessons, to: '/progress' },
+    { label: 'Quiz performance', value: stats.quizAverage === null ? '—' : `${stats.quizAverage}%`, to: '/revision?tab=quizzes' },
+  ];
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Dashboard"
-        title={`Welcome${isNew ? '' : ' back'}, ${user?.displayName ?? 'learner'}`}
-        description={isNew ? 'Paste your notes or upload a document and CyberLearn AI will build the lesson, diagrams, slides and quizzes for you.' : 'Here is where your learning stands today.'}
-        actions={
-          <ButtonLink to="/create" size="lg" icon={<Sparkles className="h-4 w-4" />}>
-            Create New Lesson
-          </ButtonLink>
-        }
-      />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-sm text-muted">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+          <h1 className="text-[28px] sm:text-[32px] font-bold tracking-tight">
+            {greeting()}, {name}
+          </h1>
+        </div>
+        {stats.streak > 0 && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/10 text-warning px-3 py-1.5 text-sm font-medium">
+            <Flame className="h-4 w-4" /> {stats.streak}-day study streak
+          </span>
+        )}
+      </div>
 
-      {isNew ? (
-        <EmptyState
-          icon={<BookOpen className="h-10 w-10" />}
-          title="Start your first learning project"
-          action={
-            <ButtonLink to="/create" icon={<Plus className="h-4 w-4" />}>
-              Create a lesson
-            </ButtonLink>
-          }
-        >
-          Paste study material (for example SIEM notes or an HTB module summary) or upload a PDF, DOCX, TXT or Markdown file. Your statistics will appear here once you start
-          studying — nothing is shown until it is real.
-        </EmptyState>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            <Link to="/library">
-              <Stat label="Lessons created" value={stats.totalLessons} hint={`${stats.totalProjects} projects`} icon={<BookOpen className="h-4 w-4" />} />
+      {data.runningGenerations.length > 0 && (
+        <div className="rounded-2xl border border-primary/30 bg-primary-soft px-4 py-3 flex flex-wrap items-center gap-3 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="font-medium">Generation jobs running</span>
+          {data.runningGenerations.map((g) => (
+            <Link key={g._id} to={`/generations/${g._id}`} className="inline-flex items-center gap-2 rounded-lg bg-surface px-2.5 py-1 hover:shadow-card">
+              {g.projectId?.title ?? 'Project'} <StatusBadge status={g.status} />
             </Link>
-            <Link to="/presentations">
-              <Stat label="Presentations" value={stats.totalPresentations} icon={<MonitorPlay className="h-4 w-4" />} />
-            </Link>
-            <Link to="/progress">
-              <Stat label="Completed lessons" value={stats.completedLessons} icon={<CheckCircle2 className="h-4 w-4" />} />
-            </Link>
-            <Link to="/revision?tab=quizzes">
-              <Stat
-                label="Quiz performance"
-                value={stats.quizAverage === null ? '—' : `${stats.quizAverage}%`}
-                hint={stats.quizAttempts ? `${stats.quizAttempts} attempts` : 'No quizzes taken yet'}
-                icon={<GraduationCap className="h-4 w-4" />}
-              />
-            </Link>
-            <Link to="/progress" className="col-span-2 lg:col-span-1">
-              <Stat label="Study streak" value={`${stats.streak} day${stats.streak === 1 ? '' : 's'}`} icon={<Flame className="h-4 w-4" />} />
-            </Link>
-          </div>
-
-          <div className="grid lg:grid-cols-3 gap-4">
-            <Card className="lg:col-span-2">
-              <CardTitle icon={<Play className="h-4 w-4" />}>Continue learning</CardTitle>
-              {data.continueLearning ? (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-lg truncate">{data.continueLearning.title}</p>
-                    <p className="text-sm text-muted">Last studied {timeAgo(data.continueLearning.lastStudiedAt)}</p>
-                    <div className="mt-3 h-2 w-full max-w-sm rounded-full bg-border overflow-hidden" role="progressbar" aria-valuenow={data.continueLearning.completion} aria-valuemin={0} aria-valuemax={100}>
-                      <div className="h-full bg-primary" style={{ width: `${data.continueLearning.completion}%` }} />
-                    </div>
-                    <p className="text-xs text-muted mt-1">{data.continueLearning.completion}% of sections understood</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <ButtonLink to={`/lessons/${data.continueLearning.lessonId}`} variant="outline">
-                      Open lesson
-                    </ButtonLink>
-                    <ButtonLink to={`/lessons/${data.continueLearning.lessonId}/present`} icon={<Play className="h-4 w-4" />}>
-                      Play
-                    </ButtonLink>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-muted">Open a generated lesson to start tracking where you left off.</p>
-              )}
-            </Card>
-
-            <Card>
-              <CardTitle icon={<CalendarClock className="h-4 w-4" />}>Recommended revision</CardTitle>
-              {data.revision.total > 0 ? (
-                <>
-                  <p className="text-3xl font-bold">{data.revision.total}</p>
-                  <p className="text-sm text-muted">
-                    {data.revision.due} due for review · {data.revision.unseen} new flashcards
-                  </p>
-                  <ButtonLink to="/revision" className="mt-4" size="sm">
-                    Start revision
-                  </ButtonLink>
-                </>
-              ) : (
-                <p className="text-sm text-muted">Nothing due. Flashcards from your lessons will be scheduled here.</p>
-              )}
-            </Card>
-          </div>
-
-          {data.runningGenerations.length > 0 && (
-            <Card>
-              <CardTitle icon={<Loader className="h-4 w-4 animate-spin" />}>Generation jobs running</CardTitle>
-              <ul className="divide-y divide-border">
-                {data.runningGenerations.map((g) => (
-                  <li key={g._id} className="flex items-center justify-between py-2 gap-2">
-                    <Link to={`/generations/${g._id}`} className="hover:text-primary truncate">
-                      {g.projectId?.title ?? 'Project'}
-                    </Link>
-                    <span className="flex items-center gap-2 text-sm text-muted shrink-0">
-                      {g.currentStage && <span className="hidden sm:inline">{g.currentStage}</span>}
-                      <StatusBadge status={g.status} />
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-
-          <div className="grid lg:grid-cols-3 gap-4">
-            <Card className="lg:col-span-2">
-              <CardTitle icon={<BookOpen className="h-4 w-4" />} action={<Link to="/library" className="text-sm text-primary">View all</Link>}>
-                Recent projects
-              </CardTitle>
-              <ul className="divide-y divide-border">
-                {data.recentProjects.map((p) => (
-                  <li key={p._id} className="py-2.5 flex items-center justify-between gap-3">
-                    <Link to={`/projects/${p._id}`} className="min-w-0 hover:text-primary">
-                      <p className="font-medium truncate">{p.title}</p>
-                      <p className="text-xs text-muted">
-                        {p.subject || 'No subject detected yet'} · updated {timeAgo(p.updatedAt)}
-                      </p>
-                    </Link>
-                    <StatusBadge status={p.status.content} />
-                  </li>
-                ))}
-              </ul>
-            </Card>
-
-            <div className="space-y-4">
-              <Card>
-                <CardTitle icon={<AlertTriangle className="h-4 w-4" />}>Topics marked as difficult</CardTitle>
-                {data.weakTopics.length ? (
-                  <ul className="space-y-2">
-                    {data.weakTopics.map((t) => (
-                      <li key={`${t.lessonId}-${t.concept}`} className="text-sm">
-                        <Link to={`/lessons/${t.lessonId}`} className="hover:text-primary font-medium">
-                          {t.concept}
-                        </Link>
-                        <span className="block text-xs text-muted">
-                          {t.mistakes} mistake{t.mistakes === 1 ? '' : 's'} · {t.lessonTitle}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-muted">Weak topics appear after you answer quizzes or review flashcards.</p>
-                )}
-              </Card>
-              <Card>
-                <CardTitle icon={<CheckCircle2 className="h-4 w-4" />}>Recently studied</CardTitle>
-                {data.recentlyStudied.length ? (
-                  <ul className="space-y-2">
-                    {data.recentlyStudied.map((r) => (
-                      <li key={r.lessonId} className="text-sm flex justify-between gap-2">
-                        <Link to={`/lessons/${r.lessonId}`} className="hover:text-primary truncate">
-                          {r.title}
-                        </Link>
-                        <span className="text-muted shrink-0">{r.completion}%</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-muted">No study sessions recorded yet.</p>
-                )}
-              </Card>
-            </div>
-          </div>
-        </>
+          ))}
+        </div>
       )}
+
+      <div className="grid lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 rounded-3xl border border-border bg-surface p-6 sm:p-7 shadow-card relative overflow-hidden">
+          <div className="absolute -right-16 -bottom-20 h-56 w-56 rounded-full bg-primary-soft blur-2xl" aria-hidden />
+          <div className="relative">
+            <p className="text-xs font-semibold uppercase tracking-wider text-primary">Continue learning</p>
+            {cont ? (
+              <>
+                <h2 className="text-2xl font-bold mt-2 leading-tight">{cont.title}</h2>
+                <p className="text-sm text-muted mt-1">Last studied {timeAgo(cont.lastStudiedAt)}</p>
+                <div className="mt-5 max-w-md">
+                  <ProgressBar value={cont.completion} />
+                  <p className="text-xs text-muted mt-2">{cont.completion}% of sections understood</p>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-6">
+                  <ButtonLink to={`/lessons/${cont.lessonId}`} icon={<BookOpen className="h-4 w-4" />}>
+                    Resume lesson
+                  </ButtonLink>
+                  <ButtonLink to={`/lessons/${cont.lessonId}/present`} variant="outline" icon={<Play className="h-4 w-4" />}>
+                    Play
+                  </ButtonLink>
+                </div>
+              </>
+            ) : startHere?.lessonId ? (
+              <>
+                <h2 className="text-2xl font-bold mt-2 leading-tight">{startHere.title}</h2>
+                <p className="text-sm text-muted mt-1">Ready to study · not started yet</p>
+                <div className="flex flex-wrap gap-2 mt-6">
+                  <ButtonLink to={`/lessons/${startHere.lessonId}`} icon={<BookOpen className="h-4 w-4" />}>
+                    Start lesson
+                  </ButtonLink>
+                  <ButtonLink to={`/lessons/${startHere.lessonId}/present`} variant="outline" icon={<Play className="h-4 w-4" />}>
+                    Watch presentation
+                  </ButtonLink>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-bold mt-2">Pick up a lesson</h2>
+                <p className="text-sm text-muted mt-1">Open a generated lesson to start tracking where you left off.</p>
+                <ButtonLink to="/library" className="mt-6" variant="outline" icon={<ArrowRight className="h-4 w-4" />}>
+                  Go to library
+                </ButtonLink>
+              </>
+            )}
+            {data.recentlyStudied.length > 1 && (
+              <div className="mt-6 pt-5 border-t border-border">
+                <p className="text-xs font-medium text-muted mb-2">Recently studied</p>
+                <div className="flex flex-wrap gap-2">
+                  {data.recentlyStudied.slice(1, 5).map((r) => (
+                    <Link key={r.lessonId} to={`/lessons/${r.lessonId}`} className="rounded-lg bg-surface-2 px-2.5 py-1 text-sm hover:text-primary">
+                      {r.title} <span className="text-muted">· {r.completion}%</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-border bg-surface p-6 shadow-card flex flex-col">
+          <p className="text-xs font-semibold uppercase tracking-wider text-secondary">Due today</p>
+          <div className="flex items-baseline gap-2 mt-2">
+            <span className="font-display text-5xl font-bold tracking-tight">{data.revision.total}</span>
+            <span className="text-muted">flashcards</span>
+          </div>
+          <p className="text-sm text-muted mt-1">
+            {data.revision.due} to review · {data.revision.unseen} new
+          </p>
+          <div className="mt-auto pt-6">
+            <ButtonLink to="/revision" variant={data.revision.total ? 'secondary' : 'outline'} className="w-full" icon={<Layers className="h-4 w-4" />}>
+              {data.revision.total ? 'Start revision' : 'Open study area'}
+            </ButtonLink>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 rounded-2xl border border-border bg-surface shadow-card divide-x divide-y md:divide-y-0 divide-border overflow-hidden">
+        {strip.map((s) => (
+          <Link key={s.label} to={s.to} className="p-4 sm:px-6 hover:bg-surface-2 transition-colors">
+            <p className="text-[13px] text-muted">{s.label}</p>
+            <p className="font-display text-2xl font-bold mt-1 tracking-tight">{s.value}</p>
+          </Link>
+        ))}
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-4">
+        <section className="lg:col-span-2 rounded-2xl border border-border bg-surface shadow-card">
+          <div className="flex items-center justify-between px-5 pt-5 pb-3">
+            <h2 className="font-semibold">Recent projects</h2>
+            <Link to="/library" className="text-sm text-primary hover:underline">
+              View all
+            </Link>
+          </div>
+          <ul>
+            {data.recentProjects.map((p) => (
+              <li key={p._id} className="border-t border-border">
+                <Link to={`/projects/${p._id}`} className="flex items-center gap-4 px-5 py-3 hover:bg-surface-2 transition-colors">
+                  <span className="h-9 w-9 shrink-0 rounded-xl bg-surface-2 flex items-center justify-center text-muted">
+                    <BookOpen className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium truncate">{p.title}</span>
+                    <span className="block text-xs text-muted">
+                      {p.subject || 'No subject detected yet'} · updated {timeAgo(p.updatedAt)}
+                    </span>
+                  </span>
+                  <StatusBadge status={p.status.content} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-surface p-5 shadow-card">
+          <h2 className="font-semibold flex items-center gap-2">
+            <Target className="h-4 w-4 text-error" /> Topics marked as difficult
+          </h2>
+          {data.weakTopics.length ? (
+            <ul className="mt-4 space-y-3">
+              {data.weakTopics.map((t) => (
+                <li key={`${t.lessonId}-${t.concept}`}>
+                  <Link to={`/lessons/${t.lessonId}`} className="group block">
+                    <span className="flex items-center justify-between gap-2 text-sm font-medium group-hover:text-primary">
+                      {t.concept}
+                      <span className="text-xs text-error font-normal">{t.mistakes}×</span>
+                    </span>
+                    <span className="block text-xs text-muted truncate">{t.lessonTitle}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted mt-3">Nothing yet. Weak topics appear after you answer quizzes or review flashcards.</p>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

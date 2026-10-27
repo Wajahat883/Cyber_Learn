@@ -1,22 +1,83 @@
 @import 'tailwindcss';
 
-/* Design tokens from spec 4.1 — use these names, never raw hex values in components. */
-@theme {
-  --color-bg: #0b1020;
-  --color-sidebar: #10182a;
-  --color-surface: #121b30;
-  --color-surface-2: #18233b;
-  --color-primary: #38bdf8;
-  --color-secondary: #8b5cf6;
-  --color-text: #f1f5f9;
-  --color-muted: #94a3b8;
-  --color-border: #263449;
-  --color-success: #34d399;
-  --color-warning: #fbbf24;
-  --color-error: #f87171;
+/*
+ * CyberLearn "Study Studio" design system.
+ * Two themes share one set of semantic tokens: components only ever use the
+ * token names (bg-surface, text-muted, bg-primary …), never raw colours.
+ * The theme is resolved before first paint by /theme-init.js (data-theme on <html>).
+ */
 
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+:root {
+  /* Light — warm paper */
+  --bg: #f6f5f1;
+  --sidebar: #efede7;
+  --surface: #ffffff;
+  --surface-2: #f2f1ec;
+  --border: #e3e1d9;
+  --text: #17191e;
+  --muted: #646a78;
+  --primary: #0f766e;
+  --primary-fg: #ffffff;
+  --primary-soft: #dff3ef;
+  --secondary: #6d28d9;
+  --secondary-soft: #efe8fd;
+  --success: #15803d;
+  --warning: #b45309;
+  --error: #dc2626;
+  --shadow: 0 1px 2px rgb(23 25 30 / 0.04), 0 4px 16px -6px rgb(23 25 30 / 0.08);
+  --shadow-lg: 0 12px 40px -12px rgb(23 25 30 / 0.25);
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  /* Dark — deep ink */
+  --bg: #0e1014;
+  --sidebar: #0b0d10;
+  --surface: #15181e;
+  --surface-2: #1c2028;
+  --border: #2a2f3a;
+  --text: #eceef2;
+  --muted: #9aa1ae;
+  --primary: #2dd4bf;
+  --primary-fg: #04201d;
+  --primary-soft: #0f2e2b;
+  --secondary: #a78bfa;
+  --secondary-soft: #241c3a;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --error: #f87171;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 16px 48px -12px rgb(0 0 0 / 0.6);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-sidebar: var(--sidebar);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-soft: var(--secondary-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  /* Fixed dark surfaces: code blocks and the presentation stage look the same in both themes. */
+  --color-code: #0d1117;
+  --color-code-fg: #e6edf3;
+  --color-stage: #0b1020;
+
+  --shadow-card: var(--shadow);
+  --shadow-pop: var(--shadow-lg);
+
+  --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Space Grotesk Variable', 'Space Grotesk', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 @layer base {
@@ -28,16 +89,24 @@
   body {
     @apply bg-bg text-text font-sans antialiased;
     line-height: 1.6;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
   }
   ::selection {
-    background: color-mix(in srgb, var(--color-primary) 35%, transparent);
+    background: color-mix(in srgb, var(--primary) 30%, transparent);
   }
   :focus-visible {
-    outline: 2px solid var(--color-primary);
+    outline: 2px solid var(--primary);
     outline-offset: 2px;
+    border-radius: 6px;
   }
   * {
-    scrollbar-color: var(--color-border) transparent;
+    scrollbar-color: var(--border) transparent;
   }
 }
 
@@ -64,13 +133,13 @@
   @apply text-primary underline underline-offset-2;
 }
 .prose-cl code {
-  @apply font-mono text-[0.9em] bg-surface-2 border border-border rounded px-1.5 py-0.5 text-primary;
+  @apply font-mono text-[0.88em] bg-surface-2 border border-border rounded px-1.5 py-0.5 text-text;
 }
 .prose-cl pre {
-  @apply bg-[#070b16] border border-border rounded-lg p-4 overflow-x-auto my-4;
+  @apply bg-code text-code-fg rounded-xl p-4 overflow-x-auto my-4;
 }
 .prose-cl pre code {
-  @apply bg-transparent border-0 p-0 text-text;
+  @apply bg-transparent border-0 p-0 text-code-fg;
 }
 .prose-cl table {
   @apply w-full text-sm my-4 border-collapse;
@@ -92,16 +161,23 @@
   @apply text-muted float-left h-0 pointer-events-none;
 }
 
-/* React Flow dark theme */
+/* React Flow follows the active theme */
 .react-flow {
   --xy-background-color: transparent;
-  --xy-edge-stroke: #4b5d7a;
-  --xy-edge-label-background-color: var(--color-surface);
-  --xy-edge-label-color: var(--color-muted);
-  --xy-controls-button-background-color: var(--color-surface-2);
-  --xy-controls-button-color: var(--color-text);
-  --xy-controls-button-border-color: var(--color-border);
-  --xy-minimap-background-color: var(--color-sidebar);
+  --xy-edge-stroke: var(--muted);
+  --xy-edge-label-background-color: var(--surface);
+  --xy-edge-label-color: var(--muted);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-color: var(--text);
+  --xy-controls-button-border-color: var(--border);
+  --xy-minimap-background-color: var(--sidebar);
+}
+
+/* Subtle dotted backdrop used on canvases (diagram explorer, knowledge graph). */
+.canvas-dots {
+  background-image: radial-gradient(color-mix(in srgb, var(--muted) 28%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
 }
 
 @media (prefers-reduced-motion: reduce) {

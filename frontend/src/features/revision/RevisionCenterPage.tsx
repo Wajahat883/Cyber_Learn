@@ -204,8 +204,7 @@ export function RevisionCenterPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Revision"
-        title="Revision Center"
+        title="Study"
         description="Flashcards on a spaced-repetition schedule, quizzes with explanations and a review of your mistakes."
         actions={
           <Select aria-label="Filter by lesson" value={lessonId} onChange={(e) => set({ lessonId: e.target.value || null, quiz: null })}>

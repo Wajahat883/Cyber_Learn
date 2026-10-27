@@ -11,6 +11,8 @@ import { Badge, EmptyState, PageLoader } from '../../components/ui/Feedback';
 import { ButtonLink } from '../../components/ui/Button';
 import { useSubjects } from '../subjects/useSubjects';
 import { forceLayout } from './forceLayout';
+import { ExploreTabs } from '../../components/layout/hubs';
+import { useThemeColors } from '../../hooks/useThemeColors';
 
 interface GraphNode {
   id: string;
@@ -35,8 +37,8 @@ const Concept = memo(function Concept({ data }: NodeProps<Node<ConceptData>>) {
   return (
     <div className="flex flex-col items-center" style={{ opacity: data.dimmed ? 0.25 : 1 }}>
       <Handle type="target" position={Position.Top} className="!opacity-0 !top-1/2" />
-      <div className="rounded-full p-[3px]" style={{ background: ring, boxShadow: data.selected ? `0 0 0 3px #F1F5F9, 0 0 24px ${data.colors[0]}` : undefined }}>
-        <div className="rounded-full bg-[#0f1830]" style={{ width: size, height: size }} />
+      <div className="rounded-full p-[3px]" style={{ background: ring, boxShadow: data.selected ? `0 0 0 3px var(--text), 0 0 24px ${data.colors[0]}` : undefined }}>
+        <div className="rounded-full bg-surface" style={{ width: size, height: size }} />
       </div>
       <span className="mt-1 max-w-[140px] text-center text-[11px] font-medium leading-tight text-text">{data.label}</span>
       <Handle type="source" position={Position.Bottom} className="!opacity-0 !top-1/2" />
@@ -53,6 +55,7 @@ export function KnowledgeGraphPage() {
   const [query, setQuery] = useState('');
   const [bridgesOnly, setBridgesOnly] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const colors = useThemeColors();
   const { data, isLoading } = useQuery({
     queryKey: ['knowledge-graph', subjectId],
     queryFn: () => api.get<{ nodes: GraphNode[]; edges: GraphEdge[]; lessonCount: number }>(`/knowledge-graph${qs({ subjectId })}`),
@@ -76,7 +79,8 @@ export function KnowledgeGraphPage() {
   if (!data?.nodes.length) {
     return (
       <>
-        <PageHeader eyebrow="Knowledge Graph" title="Knowledge Graph" />
+        <PageHeader title="Explore" />
+        <ExploreTabs active="graph" />
         <EmptyState icon={<Network className="h-10 w-10" />} title="No concepts yet" action={<ButtonLink to="/create">Create a lesson</ButtonLink>}>
           Concepts from your lessons appear here and connect across subjects, for example HTTP → Authentication → Session Management.
         </EmptyState>
@@ -112,10 +116,10 @@ export function KnowledgeGraphPage() {
       target: e.target,
       label: e.kind === 'stated' && (hot || !focus) ? e.label : undefined,
       type: 'straight',
-      markerEnd: e.kind === 'stated' ? { type: MarkerType.ArrowClosed, color: hot ? '#38BDF8' : '#4b5d7a' } : undefined,
-      style: { stroke: hot ? '#38BDF8' : '#4b5d7a', strokeWidth: hot ? 2 : 1, strokeDasharray: e.kind === 'related' ? '4 4' : undefined, opacity: focus && !hot ? 0.15 : 0.8 },
-      labelStyle: { fill: '#94A3B8', fontSize: 10 },
-      labelBgStyle: { fill: '#0B1020' },
+      markerEnd: e.kind === 'stated' ? { type: MarkerType.ArrowClosed, color: hot ? colors.primary : colors.muted } : undefined,
+      style: { stroke: hot ? colors.primary : colors.muted, strokeWidth: hot ? 2 : 1, strokeDasharray: e.kind === 'related' ? '4 4' : undefined, opacity: focus && !hot ? 0.15 : 0.8 },
+      labelStyle: { fill: colors.muted, fontSize: 10 },
+      labelBgStyle: { fill: colors.surface },
     };
   });
   const bridges = data.nodes.filter((n) => new Set(n.lessons.map((l) => l.subject)).size > 1).length;
@@ -123,10 +127,10 @@ export function KnowledgeGraphPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Knowledge Graph"
-        title="Connect your knowledge"
+        title="Explore"
         description={`${data.nodes.length} concepts from ${data.lessonCount} lesson${data.lessonCount === 1 ? '' : 's'} · ${bridges} concept${bridges === 1 ? '' : 's'} shared across subjects. Solid arrows are relationships stated in your material; dashed lines link concepts taught together.`}
       />
+      <ExploreTabs active="graph" />
       <div className="flex flex-col md:flex-row gap-3 md:items-end">
         <Select aria-label="Filter by subject" value={subjectId} onChange={(e) => (setSubjectId(e.target.value), setSelected(null))} className="md:w-60">
           <option value="">All subjects</option>
@@ -143,8 +147,8 @@ export function KnowledgeGraphPage() {
       </div>
       <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-4">
         <Card className="p-0 h-[620px] overflow-hidden">
-          <ReactFlow nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} fitView minZoom={0.1} maxZoom={2} onNodeClick={(_, n) => setSelected(n.id)} onPaneClick={() => setSelected(null)} proOptions={{ hideAttribution: true }} colorMode="dark" nodesConnectable={false}>
-            <Background color="#1d2a47" gap={28} />
+          <ReactFlow nodes={flowNodes} edges={flowEdges} nodeTypes={nodeTypes} fitView minZoom={0.1} maxZoom={2} onNodeClick={(_, n) => setSelected(n.id)} onPaneClick={() => setSelected(null)} proOptions={{ hideAttribution: true }} colorMode={colors.mode} nodesConnectable={false}>
+            <Background color={colors.border} gap={28} />
             <Controls showInteractive={false} />
           </ReactFlow>
         </Card>

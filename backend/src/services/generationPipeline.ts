@@ -19,8 +19,9 @@ import { analyzeContent, type ChunkInput } from '../ai/contentAnalyzer.js';
 import { generateAssessment } from '../ai/assessmentGenerator.js';
 import { generateSection, relevantChunks } from '../ai/lessonGenerator.js';
 import { buildCaptions, generateNarration } from '../ai/narrationGenerator.js';
-import { fallbackImageProvider, imageProvider, speechProvider, textProvider } from '../ai/providers/index.js';
-import { AiOutputError, AiProviderError, type AiUsage } from '../ai/types.js';
+import { fallbackImageProvider, imageProvider, speechProvider } from '../ai/providers/index.js';
+import { textProviderFor } from '../ai/providers/userProviders.js';
+import { AiOutputError, AiProviderError, type AiUsage, type TextGenerationProvider } from '../ai/types.js';
 import { generateDiagram, illustrationPrompt, planVisuals } from '../ai/visualPlanner.js';
 import { publishGenerationEvent } from '../jobs/eventBus.js';
 import {
@@ -54,6 +55,8 @@ interface RunState {
   preferences: GenerationPreferences;
   chunks?: ChunkInput[];
   usage: AiUsage;
+  /** The user's own AI provider from Settings, or the server default. */
+  text: TextGenerationProvider;
 }
 
 export function toEvent(gen: GenerationDoc): GenerationEvent {
@@ -153,7 +156,7 @@ const STAGES: Record<GenerationStage, (state: RunState) => Promise<string | void
 
   async analyze(state) {
     const project = await Project.findById(state.gen.projectId).lean();
-    const { analysis, usage } = await analyzeContent(textProvider(), { chunks: await loadChunks(state), projectTitle: project?.title ?? 'Lesson', preferences: state.preferences });
+    const { analysis, usage } = await analyzeContent(state.text, { chunks: await loadChunks(state), projectTitle: project?.title ?? 'Lesson', preferences: state.preferences });
     addUsage(state, usage);
     state.gen.analysis = analysis;
     await Project.updateOne({ _id: state.gen.projectId }, { $set: { subject: analysis.subject } });
@@ -214,7 +217,7 @@ const STAGES: Record<GenerationStage, (state: RunState) => Promise<string | void
         continue;
       }
       await setDetail(state, 'lesson', `Writing section ${i + 1} of ${planned.length}: ${section.title}`);
-      const { section: written, usage } = await generateSection(textProvider(), { section, chunks: relevantChunks(section, chunks), analysis, preferences: state.preferences });
+      const { section: written, usage } = await generateSection(state.text, { section, chunks: relevantChunks(section, chunks), analysis, preferences: state.preferences });
       addUsage(state, usage);
       sections.push(LessonSectionSchema.parse(written));
       lesson.set({ sections: [...sections] });
@@ -229,7 +232,7 @@ const STAGES: Record<GenerationStage, (state: RunState) => Promise<string | void
     if (!state.preferences.quizzes && !state.preferences.flashcards) throw new SkipStage();
     const lesson = await lessonFor(state);
     const chunks = await loadChunks(state);
-    const { assessment, usage } = await generateAssessment(textProvider(), {
+    const { assessment, usage } = await generateAssessment(state.text, {
       title: lesson.title,
       sections: lesson.sections as LessonSection[],
       keyTerms: analysisOf(state).keyTerms,
@@ -280,7 +283,7 @@ const STAGES: Record<GenerationStage, (state: RunState) => Promise<string | void
       await setDetail(state, 'diagrams', `Diagram ${i + 1} of ${plan.diagrams.length}: ${section.title}`);
       try {
         const planned = analysis.sections.find((s) => s.id === section.id);
-        const { diagram, usage } = await generateDiagram(textProvider(), {
+        const { diagram, usage } = await generateDiagram(state.text, {
           visual,
           section,
           chunks: planned ? relevantChunks(planned, chunks) : chunks.slice(0, 3),
@@ -389,7 +392,7 @@ const STAGES: Record<GenerationStage, (state: RunState) => Promise<string | void
       const d = s.diagramId ? diagrams.get(s.diagramId) : undefined;
       if (d) diagramLabels[s.id] = (d.steps.length ? d.steps : d.nodes.map((n) => n.id)).map((id) => d.nodes.find((n) => n.id === id)?.label ?? id);
     }
-    const { texts, usage } = await generateNarration(textProvider(), { lessonTitle: lesson.title, slides: manifest.slides, diagramLabels, preferences: state.preferences });
+    const { texts, usage } = await generateNarration(state.text, { lessonTitle: lesson.title, slides: manifest.slides, diagramLabels, preferences: state.preferences });
     addUsage(state, usage);
 
     const speech = speechProvider();
@@ -465,11 +468,21 @@ export async function runGeneration(generationId: string): Promise<void> {
     await emit(gen);
     return;
   }
+  let text: TextGenerationProvider;
+  try {
+    text = await textProviderFor(String(gen.ownerId));
+  } catch (err) {
+    gen.status = 'failed';
+    gen.errorMessage = safeError(err);
+    await emit(gen);
+    return;
+  }
   const state: RunState = {
     gen,
     ownerId: String(gen.ownerId),
     preferences: GenerationPreferencesSchema.parse(gen.preferences ?? {}),
     usage: { calls: 0, inputChars: 0, outputChars: 0 },
+    text,
   };
   gen.status = 'running';
   gen.attemptCount += 1;

@@ -38,29 +38,56 @@ export class OpenAICompatibleTextProvider implements TextGenerationProvider {
     if (!model) throw new Error('AI_TEXT_MODEL is required for the openai-compatible provider');
   }
 
+  /** Output-token ceiling learned from the provider (models differ: some allow only 4096). */
+  private maxOutputTokens?: number;
+
   generateStructured<T>(request: StructuredRequest<T>) {
     return runStructured(async (system, user, maxTokens) => {
-      const res = await post(
-        this.baseUrl,
-        this.apiKey,
-        '/chat/completions',
-        {
-          model: this.model,
-          max_tokens: maxTokens,
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-          ],
-        },
-        env.AI_REQUEST_TIMEOUT_MS,
-      );
+      const send = (limit: number) =>
+        post(
+          this.baseUrl,
+          this.apiKey,
+          '/chat/completions',
+          {
+            model: this.model,
+            max_tokens: limit,
+            messages: [
+              { role: 'system', content: system },
+              { role: 'user', content: user },
+            ],
+          },
+          env.AI_REQUEST_TIMEOUT_MS,
+        );
+      let res: Response;
+      try {
+        res = await send(Math.min(maxTokens, this.maxOutputTokens ?? maxTokens));
+      } catch (err) {
+        // "max_tokens must be less than or equal to 4096": retry once within the model's limit and remember it.
+        const limit = err instanceof AiProviderError && /max_tokens|max_completion_tokens/i.test(err.message) ? maxTokensFrom(err.message) : undefined;
+        if (!limit) throw err;
+        this.maxOutputTokens = limit;
+        res = await send(Math.min(maxTokens, limit));
+      }
       const json = (await res.json()) as { choices?: { message?: { content?: string }; finish_reason?: string }[] };
       const choice = json.choices?.[0];
       if (!choice?.message?.content) throw new AiProviderError('AI provider returned an empty response', true, 'AI_EMPTY');
-      if (choice.finish_reason === 'length') throw new AiProviderError('AI response was cut off (token limit)', false, 'AI_TRUNCATED');
+      if (choice.finish_reason === 'length') {
+        throw new AiProviderError(
+          `AI response was cut off: this model allows only ${this.maxOutputTokens ?? maxTokens} output tokens. Choose a model with a larger output limit in Settings, or use shorter notes.`,
+          false,
+          'AI_TRUNCATED',
+        );
+      }
       return choice.message.content;
     }, request);
   }
+}
+
+/** Reads the largest allowed value from a provider error such as "must be less than or equal to `4096`". */
+export function maxTokensFrom(message: string): number | undefined {
+  const m = message.match(/(?:less than or equal to|at most|maximum(?: value)?(?: for `?max_tokens`?)? (?:is|of)|<=)\s*`?(\d{3,7})`?/i);
+  const value = m ? Number(m[1]) : NaN;
+  return Number.isFinite(value) && value >= 256 ? value : undefined;
 }
 
 export class OpenAICompatibleImageProvider implements ImageGenerationProvider {

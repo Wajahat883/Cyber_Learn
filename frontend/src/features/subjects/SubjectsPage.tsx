@@ -10,6 +10,7 @@ import { Alert, EmptyState, PageLoader } from '../../components/ui/Feedback';
 import { ConfirmModal, Modal } from '../../components/ui/Modal';
 import type { LearningPath, Project, Subject } from '../../types/models';
 import { useSubjects } from './useSubjects';
+import { LibraryTabs } from '../../components/layout/hubs';
 
 const COLORS = ['#38BDF8', '#8B5CF6', '#34D399', '#FBBF24', '#F87171', '#F472B6', '#22D3EE', '#A3E635'];
 
@@ -144,15 +145,15 @@ export function SubjectsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Workspace"
-        title="Subjects & Learning Paths"
-        description="Subjects are data, not separate apps. Add a new subject and the importer, AI teacher, diagrams, quizzes and revision system work for it immediately."
+        title="Library"
+        description="Subjects organise your projects. Add one and the importer, AI teacher, quizzes and revision work for it immediately."
         actions={
           <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreating(true)}>
             Add new subject
           </Button>
         }
       />
+      <LibraryTabs active="subjects" />
       {!subjects?.length ? (
         <EmptyState icon={<FolderKanban className="h-10 w-10" />} title="No subjects yet" action={<Button onClick={() => setCreating(true)}>Add a subject</Button>} />
       ) : (

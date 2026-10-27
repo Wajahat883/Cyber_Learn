@@ -22,6 +22,10 @@ const EnvSchema = z.object({
   REDIS_URL: z.string().optional().default(''),
   RUN_WORKER_IN_PROCESS: bool,
   SESSION_SECRET: z.string().optional().default(''),
+  /** Optional dedicated key for encrypting stored API keys (falls back to SESSION_SECRET). */
+  SECRETS_KEY: z.string().optional().default(''),
+  /** Where the Ollama preset connects (http://host.docker.internal:11434/v1 from Docker). */
+  OLLAMA_BASE_URL: z.string().default('http://localhost:11434/v1'),
   COOKIE_SECURE: bool,
 
   AI_TEXT_PROVIDER: z.enum(['mock', 'openai-compatible', 'anthropic']).default('mock'),

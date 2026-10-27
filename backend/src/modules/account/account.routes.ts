@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { Types } from 'mongoose';
 import { z } from 'zod';
-import { UpdateProfileSchema } from '@cyberlearn/shared';
+import { AI_PROVIDER_PRESETS, AiSettingsInputSchema, presetById, UpdateProfileSchema, type AiSettingsInput } from '@cyberlearn/shared';
+import { buildProvider, listModels, resolveBaseUrl, type ProviderConfig } from '../../ai/providers/userProviders.js';
+import { AiOutputError, AiProviderError } from '../../ai/types.js';
+import { aiLimiter } from '../../middleware/rateLimit.js';
 import { env } from '../../config/env.js';
 import { storage } from '../../config/storage.js';
 import { clearSessionCookie, setSessionCookie } from '../../middleware/authenticate.js';
@@ -27,8 +30,8 @@ import {
   User,
 } from '../../models/index.js';
 import { deleteProjectData } from '../../services/projectData.js';
-import { verifyPassword } from '../../utils/crypto.js';
-import { AppError } from '../../utils/errors.js';
+import { decryptSecret, encryptSecret, verifyPassword } from '../../utils/crypto.js';
+import { AppError, badRequest } from '../../utils/errors.js';
 import { userId } from '../../utils/http.js';
 import { publicUser } from '../auth/auth.service.js';
 
@@ -65,7 +68,9 @@ accountRouter.get('/account/overview', async (req, res) => {
     counts: { projects: counts[0], lessons: counts[1], presentations: counts[2] },
     // Provider names only — API keys stay server-side and are never returned.
     providers: {
-      text: { provider: env.AI_TEXT_PROVIDER, model: env.AI_TEXT_PROVIDER === 'mock' ? 'offline heuristics' : env.AI_TEXT_MODEL || 'default', configured: env.AI_TEXT_PROVIDER === 'mock' || Boolean(env.AI_TEXT_API_KEY || env.AI_TEXT_BASE_URL) },
+      text: user?.aiSettings?.provider
+        ? { provider: presetById(user.aiSettings.provider)?.label ?? user.aiSettings.provider, model: user.aiSettings.model || 'default', configured: true, source: 'yours' }
+        : { provider: env.AI_TEXT_PROVIDER, model: env.AI_TEXT_PROVIDER === 'mock' ? 'offline heuristics' : env.AI_TEXT_MODEL || 'default', configured: env.AI_TEXT_PROVIDER === 'mock' || Boolean(env.AI_TEXT_API_KEY || env.AI_TEXT_BASE_URL), source: 'server' },
       image: { provider: env.AI_IMAGE_PROVIDER, model: env.AI_IMAGE_MODEL || '' },
       speech: { provider: env.AI_SPEECH_PROVIDER, model: env.AI_SPEECH_MODEL || '' },
       storage: env.STORAGE_DRIVER,
@@ -141,5 +146,93 @@ accountRouter.delete('/account', authLimiter, validate(DeleteSchema), async (req
   ]);
   await user.deleteOne();
   clearSessionCookie(res);
+  res.status(204).end();
+});
+
+// ---------------------------------------------------------------- AI provider (Settings)
+
+const hint = (key: string) => (key ? `••••${key.slice(-4)}` : '');
+
+/** Current provider settings. The API key itself is never returned, only a hint. */
+accountRouter.get('/account/ai', async (req, res) => {
+  const user = await User.findById(userId(req)).select('aiSettings').lean();
+  const s = user?.aiSettings;
+  res.json({
+    settings: s?.provider ? { provider: s.provider, model: s.model, baseUrl: s.provider === 'custom' ? s.baseUrl : '', hasKey: Boolean(s.keyHint), keyHint: s.keyHint, updatedAt: s.updatedAt } : null,
+    serverDefault: { provider: env.AI_TEXT_PROVIDER, model: env.AI_TEXT_PROVIDER === 'mock' ? '' : env.AI_TEXT_MODEL },
+    presets: AI_PROVIDER_PRESETS,
+  });
+});
+
+/** Builds a provider config from a request, falling back to the saved key when the provider is unchanged. */
+async function configFrom(ownerId: string, input: AiSettingsInput): Promise<ProviderConfig> {
+  const saved = (await User.findById(ownerId).select('+aiSettings.apiKeyEnc').lean())?.aiSettings;
+  let apiKey = input.apiKey ?? '';
+  if (!apiKey && saved?.provider === input.provider && saved.apiKeyEnc) apiKey = decryptSecret(saved.apiKeyEnc) ?? '';
+  const baseUrl = await resolveBaseUrl(input.provider, input.baseUrl || (saved?.provider === 'custom' ? saved.baseUrl : ''));
+  return { provider: input.provider, model: input.model, baseUrl, apiKey };
+}
+
+function providerError(err: unknown): never {
+  if (err instanceof AiProviderError) throw new AppError(err.retryable ? 503 : 400, err.code, err.message);
+  if (err instanceof AiOutputError) throw new AppError(400, 'AI_OUTPUT_INVALID', 'The model answered, but not in the required JSON format. Try a more capable model.');
+  throw err;
+}
+
+accountRouter.post('/account/ai/models', aiLimiter, validate(AiSettingsInputSchema), async (req, res) => {
+  const cfg = await configFrom(userId(req), req.body);
+  const preset = presetById(cfg.provider);
+  if (preset?.needsKey && !cfg.apiKey) throw badRequest(`Enter your ${preset.label} API key first`);
+  try {
+    res.json({ models: await listModels(cfg) });
+  } catch (err) {
+    providerError(err);
+  }
+});
+
+/** Makes one small structured request, the same way lessons are generated. */
+accountRouter.post('/account/ai/test', aiLimiter, validate(AiSettingsInputSchema), async (req, res) => {
+  const cfg = await configFrom(userId(req), req.body);
+  const provider = buildProvider(cfg);
+  const started = Date.now();
+  try {
+    const { data } = await provider.generateStructured({
+      task: 'answer',
+      instructions: 'Connection test. Reply with JSON {"answer": "OK", "supported": true, "citedChunks": []}.',
+      content: 'test',
+      schema: z.object({ answer: z.string(), supported: z.boolean(), citedChunks: z.array(z.number()).default([]) }),
+      context: { question: 'test', chunks: [{ index: 0, text: 'connection test ok', heading: '', page: 0, sourceId: '' }], language: 'en' },
+      maxTokens: 200,
+    });
+    res.json({ ok: true, latencyMs: Date.now() - started, model: provider.model, reply: data.answer.slice(0, 80) });
+  } catch (err) {
+    providerError(err);
+  }
+});
+
+accountRouter.put('/account/ai', validate(AiSettingsInputSchema), async (req, res) => {
+  const ownerId = userId(req);
+  const input = req.body as AiSettingsInput;
+  const cfg = await configFrom(ownerId, input);
+  buildProvider(cfg); // validates provider, key and model before saving
+  await User.updateOne(
+    { _id: ownerId },
+    {
+      $set: {
+        'aiSettings.provider': cfg.provider,
+        'aiSettings.model': cfg.model,
+        'aiSettings.baseUrl': cfg.provider === 'custom' ? cfg.baseUrl : '',
+        'aiSettings.apiKeyEnc': cfg.apiKey ? encryptSecret(cfg.apiKey) : '',
+        'aiSettings.keyHint': hint(cfg.apiKey),
+        'aiSettings.updatedAt': new Date(),
+      },
+    },
+  );
+  res.json({ saved: true, keyHint: hint(cfg.apiKey) });
+});
+
+/** Back to the server default from .env. The stored key is deleted. */
+accountRouter.delete('/account/ai', async (req, res) => {
+  await User.updateOne({ _id: userId(req) }, { $set: { aiSettings: { provider: '', model: '', baseUrl: '', apiKeyEnc: '', keyHint: '', updatedAt: new Date() } } });
   res.status(204).end();
 });

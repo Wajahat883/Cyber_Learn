@@ -1,7 +1,7 @@
 import { useRef, useState, type DragEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, FileText, Sparkles, Trash2, UploadCloud, ShieldAlert, Save } from 'lucide-react';
+import { FileText, Paperclip, Save, ShieldAlert, SlidersHorizontal, Sparkles, UploadCloud, X } from 'lucide-react';
 import {
   ALLOWED_UPLOAD_EXTENSIONS,
   GenerationPreferencesSchema,
@@ -12,10 +12,11 @@ import {
 import { api, errorMessage } from '../../lib/api';
 import { useAuth } from '../auth/AuthContext';
 import { useSubjects, useWorkspace } from '../subjects/useSubjects';
-import { Card, CardTitle, PageHeader } from '../../components/ui/Card';
+import { cn } from '../../lib/cn';
+import { Steps } from '../../components/ui/Steps';
 import { Button } from '../../components/ui/Button';
-import { Input, Segmented, Select, Textarea, Toggle } from '../../components/ui/Field';
-import { Alert, Badge } from '../../components/ui/Feedback';
+import { Segmented, Toggle } from '../../components/ui/Field';
+import { Alert } from '../../components/ui/Feedback';
 import { formatBytes } from '../../utils/format';
 import type { Project, Source, Generation } from '../../types/models';
 
@@ -102,6 +103,21 @@ export function validateFile(file: File): string | null {
   return null;
 }
 
+const LABELS: Record<string, string> = {
+  en: 'English',
+  'roman-urdu': 'Roman Urdu',
+  bilingual: 'Bilingual',
+  beginner: 'Beginner',
+  intermediate: 'Intermediate',
+  advanced: 'Advanced',
+  concise: 'Concise',
+  detailed: 'Detailed',
+  diagrams: 'Diagrams',
+  illustrations: 'Illustrations',
+  both: 'Diagrams + illustrations',
+};
+
+/** Screen 2 — one composer for pasting and uploading, sensible defaults, one primary action. */
 export function CreateLessonPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -130,6 +146,15 @@ export function CreateLessonPage() {
     if (!title && list[0]) setTitle(list[0].name.replace(/\.[^.]+$/, ''));
   };
 
+  // A first Markdown heading in pasted notes becomes the title automatically.
+  const onText = (value: string) => {
+    setText(value);
+    if (!title) {
+      const heading = value.match(/^#\s+(.+)$/m)?.[1]?.trim();
+      if (heading) setTitle(heading.slice(0, 200));
+    }
+  };
+
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setDragging(false);
@@ -138,7 +163,7 @@ export function CreateLessonPage() {
 
   const hasText = text.trim().length >= 20;
   const validFiles = files.filter((f) => f.status !== 'error');
-  const canSubmit = title.trim() && (hasText || validFiles.length > 0) && text.length <= MAX_PASTED_TEXT_CHARS;
+  const canSubmit = Boolean(title.trim() && (hasText || validFiles.length > 0) && text.length <= MAX_PASTED_TEXT_CHARS);
 
   const submit = async (mode: 'save' | 'generate') => {
     setBusy(mode);
@@ -188,112 +213,151 @@ export function CreateLessonPage() {
     }
   };
 
+  const summary = [
+    LABELS[preferences.language],
+    LABELS[preferences.difficulty],
+    LABELS[preferences.density],
+    LABELS[preferences.visualMode],
+    preferences.narration ? 'Narration' : 'No narration',
+    [preferences.quizzes && 'Quizzes', preferences.flashcards && 'Flashcards'].filter(Boolean).join(' + ') || 'No revision',
+  ];
+
   return (
-    <div>
-      <PageHeader eyebrow="Create" title="Create New Lesson" description="Paste your material or upload documents. The application analyzes it and builds the complete learning experience." />
-      <div className="grid xl:grid-cols-3 gap-5">
-        <div className="xl:col-span-2 space-y-5">
-          <Card>
-            <CardTitle icon={<FileText className="h-4 w-4" />}>Source material</CardTitle>
-            <div className="grid sm:grid-cols-2 gap-4 mb-4">
-              <Input label="Lesson title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. SIEM Architecture" maxLength={200} />
-              <Select label="Subject" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
-                <option value="">Detect automatically / none</option>
-                {subjects?.map((s) => (
-                  <option key={s._id} value={s._id}>
-                    {s.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <Textarea
-              label="Paste your notes"
-              hint={`${text.length.toLocaleString()} / ${MAX_PASTED_TEXT_CHARS.toLocaleString()} characters`}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Paste lesson notes, a lecture transcript, module summary or documentation…"
-              className="[&_textarea]:min-h-[300px] [&_textarea]:font-mono [&_textarea]:text-[13px]"
-              error={text.length > MAX_PASTED_TEXT_CHARS ? 'This text is longer than the limit. Split it into several projects or upload it as a file.' : undefined}
-            />
-            <Input className="mt-4" label="Tags" hint="comma separated, optional" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="soc, siem, htb-cdsa" />
-          </Card>
+    <div className="max-w-3xl mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-[28px] sm:text-[32px] font-bold tracking-tight">Create a lesson</h1>
+          <p className="text-muted mt-1">Paste your notes or drop a document. Everything else is automatic.</p>
+        </div>
+        <Steps current={0} />
+      </div>
 
-          <Card>
-            <CardTitle icon={<UploadCloud className="h-4 w-4" />}>Upload documents</CardTitle>
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={onDrop}
-              className={`rounded-xl border-2 border-dashed p-8 text-center transition-colors ${dragging ? 'border-primary bg-primary/5' : 'border-border'}`}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(e) => e.currentTarget.contains(e.relatedTarget as Node) || setDragging(false)}
+        onDrop={onDrop}
+        className={cn('rounded-3xl border bg-surface shadow-card transition-colors', dragging ? 'border-primary ring-4 ring-primary/15' : 'border-border')}
+      >
+        <div className="px-6 pt-6">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. SIEM Architecture"
+            aria-label="Lesson title"
+            maxLength={200}
+            className="w-full bg-transparent font-display text-2xl font-bold tracking-tight outline-none placeholder:text-muted/50"
+          />
+          <div className="flex flex-wrap gap-2 mt-3">
+            <select
+              aria-label="Subject"
+              value={subjectId}
+              onChange={(e) => setSubjectId(e.target.value)}
+              className="h-8 rounded-lg bg-surface-2 px-2.5 text-[13px] text-text border border-transparent focus:border-primary focus:outline-none"
             >
-              <UploadCloud className="h-10 w-10 mx-auto text-primary/70" />
-              <p className="mt-2 font-medium">Drag and drop files here</p>
-              <p className="text-sm text-muted">
-                PDF, DOCX, TXT or Markdown · up to {formatBytes(MAX_UPLOAD_BYTES)} each · max 10 files
-              </p>
-              <Button variant="outline" size="sm" className="mt-4" onClick={() => inputRef.current?.click()}>
-                Browse files
-              </Button>
-              <input ref={inputRef} type="file" multiple hidden accept={ALLOWED_UPLOAD_EXTENSIONS.join(',')} onChange={(e) => addFiles(e.target.files)} />
-            </div>
-            {files.length > 0 && (
-              <ul className="mt-4 space-y-2">
-                {files.map((f, i) => (
-                  <li key={`${f.file.name}-${i}`} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
-                    <span className="truncate">{f.file.name}</span>
-                    <span className="flex items-center gap-2 shrink-0">
-                      <span className="text-muted">{formatBytes(f.file.size)}</span>
-                      {f.status === 'error' ? <Badge tone="error">{f.error}</Badge> : <Badge tone={f.status === 'done' ? 'success' : 'default'}>{f.status}</Badge>}
-                      <button onClick={() => setFiles((all) => all.filter((_, j) => j !== i))} aria-label={`Remove ${f.file.name}`} className="text-muted hover:text-error">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+              <option value="">Subject: detect automatically</option>
+              {subjects?.map((s) => (
+                <option key={s._id} value={s._id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <input
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="Tags: soc, siem, htb-cdsa"
+              aria-label="Tags"
+              className="h-8 min-w-0 flex-1 rounded-lg bg-surface-2 px-2.5 text-[13px] border border-transparent focus:border-primary focus:outline-none placeholder:text-muted"
+            />
+          </div>
         </div>
 
-        <div className="space-y-5">
-          <Card className="xl:sticky xl:top-20">
-            <CardTitle icon={<Sparkles className="h-4 w-4" />}>Generate</CardTitle>
-            <div className="divide-y divide-border mb-4">
-              <Toggle
-                label="Review the plan first"
-                description="Pause after analysis so you can edit the title and remove sections before media is generated"
-                checked={reviewPlan}
-                onChange={setReviewPlan}
-              />
+        <div className="relative mt-4">
+          <textarea
+            value={text}
+            onChange={(e) => onText(e.target.value)}
+            aria-label="Paste your notes"
+            placeholder="Paste lesson notes, a lecture transcript, a module summary or documentation… or drop PDF, DOCX, TXT and Markdown files here."
+            className="block w-full min-h-[320px] resize-y bg-transparent px-6 py-4 font-mono text-[13px] leading-relaxed outline-none border-y border-border placeholder:font-sans placeholder:text-sm placeholder:text-muted"
+          />
+          {dragging && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-primary-soft/90 text-primary font-medium pointer-events-none">
+              <UploadCloud className="h-8 w-8" /> Drop files to attach
             </div>
-            <button type="button" onClick={() => setAdvanced(!advanced)} className="flex items-center gap-2 text-sm text-muted hover:text-text mb-3" aria-expanded={advanced}>
-              <ChevronDown className={`h-4 w-4 transition-transform ${advanced ? 'rotate-180' : ''}`} /> Advanced preferences
-            </button>
-            {advanced && (
-              <div className="mb-5">
-                <PreferencesForm value={preferences} onChange={setPreferences} />
-              </div>
-            )}
-            {error && (
-              <div className="mb-3">
-                <Alert tone="error">{error}</Alert>
-              </div>
-            )}
-            <Button size="lg" className="w-full" disabled={!canSubmit} loading={busy === 'generate'} onClick={() => submit('generate')} icon={<Sparkles className="h-4 w-4" />}>
-              Generate Learning Experience
-            </Button>
-            <Button variant="outline" className="w-full mt-2" disabled={!canSubmit} loading={busy === 'save'} onClick={() => submit('save')} icon={<Save className="h-4 w-4" />}>
-              Save project without generating
-            </Button>
-            <div className="mt-4 flex gap-2 text-xs text-muted">
-              <ShieldAlert className="h-4 w-4 shrink-0 text-warning" />
-              <p>Do not upload secrets, credentials or sensitive third-party data unless you are authorized to process it. Logs you paste are sent to the configured AI provider.</p>
-            </div>
-          </Card>
+          )}
         </div>
+
+        {files.length > 0 && (
+          <ul className="flex flex-wrap gap-2 px-6 pt-4">
+            {files.map((f, i) => (
+              <li
+                key={`${f.file.name}-${i}`}
+                className={cn('inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[13px]', f.status === 'error' ? 'border-error/40 bg-error/5 text-error' : 'border-border bg-surface-2')}
+                title={f.error}
+              >
+                <FileText className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate max-w-48">{f.file.name}</span>
+                <span className="text-muted">{f.status === 'error' ? f.error : f.status === 'waiting' ? formatBytes(f.file.size) : f.status}</span>
+                <button onClick={() => setFiles((all) => all.filter((_, j) => j !== i))} aria-label={`Remove ${f.file.name}`} className="text-muted hover:text-error">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+          <button type="button" onClick={() => inputRef.current?.click()} className="inline-flex items-center gap-2 text-sm text-muted hover:text-primary">
+            <Paperclip className="h-4 w-4" /> Attach files
+            <span className="hidden sm:inline text-xs">· PDF, DOCX, TXT, MD · up to {formatBytes(MAX_UPLOAD_BYTES)}</span>
+          </button>
+          <input ref={inputRef} type="file" multiple hidden accept={ALLOWED_UPLOAD_EXTENSIONS.join(',')} onChange={(e) => addFiles(e.target.files)} />
+          <span className={cn('text-xs tabular-nums', text.length > MAX_PASTED_TEXT_CHARS ? 'text-error' : 'text-muted')}>
+            {text.length.toLocaleString()} / {MAX_PASTED_TEXT_CHARS.toLocaleString()}
+          </span>
+        </div>
+      </div>
+      {text.length > MAX_PASTED_TEXT_CHARS && (
+        <p className="text-sm text-error mt-2">This text is longer than the limit. Split it into several projects or upload it as a file.</p>
+      )}
+
+      <div className="mt-5 rounded-2xl border border-border bg-surface shadow-card">
+        <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+          <SlidersHorizontal className="h-4 w-4 text-muted" />
+          <p className="flex-1 min-w-0 text-sm text-muted truncate">{summary.join(' · ')}</p>
+          <button type="button" onClick={() => setAdvanced(!advanced)} className="text-sm font-medium text-primary hover:underline" aria-expanded={advanced}>
+            {advanced ? 'Done' : 'Customize'}
+          </button>
+        </div>
+        {advanced && (
+          <div className="border-t border-border px-5 py-5">
+            <PreferencesForm value={preferences} onChange={setPreferences} />
+          </div>
+        )}
+        <div className="border-t border-border px-5">
+          <Toggle label="Review the plan first" description="Pause after analysis so you can rename the lesson and remove sections before media is generated" checked={reviewPlan} onChange={setReviewPlan} />
+        </div>
+      </div>
+
+      {error && (
+        <div className="mt-4">
+          <Alert tone="error">{error}</Alert>
+        </div>
+      )}
+
+      <div className="mt-6 flex flex-col-reverse sm:flex-row sm:items-center gap-3">
+        <p className="flex-1 flex gap-2 text-xs text-muted">
+          <ShieldAlert className="h-4 w-4 shrink-0 text-warning" />
+          Don&apos;t include secrets, credentials or third-party data you aren&apos;t authorized to process. Notes are sent to the configured AI provider.
+        </p>
+        <Button variant="ghost" disabled={!canSubmit} loading={busy === 'save'} onClick={() => submit('save')} icon={<Save className="h-4 w-4" />}>
+          Save as draft
+        </Button>
+        <Button size="lg" disabled={!canSubmit} loading={busy === 'generate'} onClick={() => submit('generate')} icon={<Sparkles className="h-4 w-4" />}>
+          Generate Learning Experience
+        </Button>
       </div>
     </div>
   );

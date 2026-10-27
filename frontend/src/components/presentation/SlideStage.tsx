@@ -58,7 +58,7 @@ function DiagramStage({ diagram, frame }: { diagram: DiagramSpec; frame: SlideFr
 
 function Terminal({ slide, frame }: { slide: Slide; frame: SlideFrame }) {
   return (
-    <div className="mt-8 rounded-2xl border border-border bg-[#05080f] overflow-hidden font-mono">
+    <div className="mt-8 rounded-2xl border border-border bg-[#070b16] overflow-hidden font-mono">
       <div className="flex gap-2 px-4 py-3 border-b border-border">
         <span className="h-3 w-3 rounded-full bg-error" />
         <span className="h-3 w-3 rounded-full bg-warning" />

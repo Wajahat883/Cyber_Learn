@@ -1,4 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router';
+import { ExploreTabs } from '../../components/layout/hubs';
 import { useMutation } from '@tanstack/react-query';
 import { MessageSquareText, Send } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
@@ -21,6 +23,16 @@ export function AskPage() {
       setQuestion('');
     },
   });
+  // Questions handed over from the command palette (/ask?q=…) are asked straight away.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const q = params.get('q');
+    if (q && q.trim().length >= 3) {
+      ask.mutate(q.trim());
+      setParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
   const submit = (e?: FormEvent, q = question) => {
     e?.preventDefault();
     if (q.trim().length >= 3) ask.mutate(q.trim());
@@ -28,7 +40,8 @@ export function AskPage() {
 
   return (
     <div className="max-w-3xl">
-      <PageHeader eyebrow="Ask My Notes" title="Ask your notes" description="Questions are answered only from material you have saved. If your notes do not cover something, you will be told — nothing is made up." />
+      <PageHeader title="Explore" description="Questions are answered only from material you have saved. If your notes do not cover something, you will be told — nothing is made up." />
+      <ExploreTabs active="ask" />
       <form onSubmit={submit} className="flex gap-2">
         <input
           value={question}

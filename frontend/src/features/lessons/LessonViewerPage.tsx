@@ -13,6 +13,8 @@ import {
   Layers,
   Network,
   Lightbulb,
+  MoreHorizontal,
+  Info,
   Pencil,
   Play,
   RefreshCw,
@@ -23,7 +25,8 @@ import {
 import type { LessonSection, ProgressUpdateInput } from '@cyberlearn/shared';
 import { api, errorMessage } from '../../lib/api';
 import { cn } from '../../lib/cn';
-import { Button, ButtonLink } from '../../components/ui/Button';
+import { Button, ButtonLink, buttonClass } from '../../components/ui/Button';
+import { Menu } from '../../components/ui/Menu';
 import { Alert, Badge, ErrorState, PageLoader } from '../../components/ui/Feedback';
 import { ConfirmModal } from '../../components/ui/Modal';
 import { CopyButton, Markdown } from '../../components/ui/Markdown';
@@ -77,13 +80,13 @@ function SectionView({ lesson, section, progress, query, onProgress, busy }: { l
   });
 
   return (
-    <section id={section.id} className={cn('scroll-mt-24 rounded-xl border bg-surface p-5 sm:p-6 space-y-4', matches ? 'border-primary ring-1 ring-primary/40' : 'border-border', query && !matches && 'opacity-50')}>
+    <section id={section.id} className={cn('scroll-mt-24 rounded-2xl border bg-surface p-6 sm:p-8 space-y-5 shadow-card', matches ? 'border-primary ring-4 ring-primary/15' : 'border-border', query && !matches && 'opacity-40')}>
       <header className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold">{section.title}</h2>
+          <h2 className="text-[22px] font-bold leading-tight">{section.title}</h2>
           <div className="flex flex-wrap gap-1.5 mt-2">
             <Badge tone={grounding.tone}>{grounding.label}</Badge>
-            {section.keyConcepts.slice(0, 6).map((k) => (
+            {section.keyConcepts.slice(0, 3).map((k) => (
               <Badge key={k}>{k}</Badge>
             ))}
           </div>
@@ -95,11 +98,21 @@ function SectionView({ lesson, section, progress, query, onProgress, busy }: { l
           <Button size="icon" variant="ghost" disabled={busy} onClick={() => onProgress(bookmarked ? { unbookmarkSectionId: section.id } : { bookmarkSectionId: section.id })} aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark section'} aria-pressed={bookmarked}>
             {bookmarked ? <BookmarkCheck className="h-4 w-4 text-warning" /> : <Bookmark className="h-4 w-4" />}
           </Button>
+          <Menu
+            label="Section actions"
+            trigger={examples.isPending || regenerate.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+            triggerClassName={buttonClass('ghost', 'icon')}
+            items={[
+              { label: 'Generate more examples', icon: <Sparkles />, onSelect: () => examples.mutate(), disabled: examples.isPending },
+              { label: 'Regenerate section', icon: <RefreshCw />, onSelect: () => setConfirmRegen(true) },
+              ...diagrams.map((d) => ({ label: `Explore “${d.title}”`, icon: <Layers />, to: `/lessons/${lesson._id}/diagrams/${d.id}` })),
+            ]}
+          />
         </div>
       </header>
 
       {section.definition && (
-        <div className="rounded-lg border-l-4 border-primary bg-primary/5 px-4 py-3">
+        <div className="rounded-xl border-l-4 border-primary bg-primary-soft/60 px-5 py-4">
           <p className="text-xs uppercase tracking-wider text-primary mb-1">Definition</p>
           <Markdown>{section.definition}</Markdown>
         </div>
@@ -139,7 +152,7 @@ function SectionView({ lesson, section, progress, query, onProgress, busy }: { l
       )}
       {section.codeSnippets.map((c, i) => (
         <div key={i} className="relative">
-          <pre className="bg-[#070b16] border border-border rounded-lg p-4 overflow-x-auto text-sm font-mono">
+          <pre className="bg-code text-code-fg rounded-xl p-4 overflow-x-auto text-sm font-mono">
             <code>{c.code}</code>
           </pre>
           <CopyButton text={c.code} />
@@ -176,14 +189,6 @@ function SectionView({ lesson, section, progress, query, onProgress, busy }: { l
           <Markdown>{section.summary}</Markdown>
         </div>
       )}
-      <footer className="flex flex-wrap gap-2 pt-2 border-t border-border">
-        <Button size="sm" variant="ghost" icon={<Sparkles className="h-4 w-4" />} loading={examples.isPending} onClick={() => examples.mutate()}>
-          Generate more examples
-        </Button>
-        <Button size="sm" variant="ghost" icon={<RefreshCw className="h-4 w-4" />} onClick={() => setConfirmRegen(true)}>
-          Regenerate section
-        </Button>
-      </footer>
       {(examples.error || regenerate.error) && <Alert tone="error">{errorMessage(examples.error ?? regenerate.error)}</Alert>}
       <ConfirmModal
         open={confirmRegen}
@@ -196,6 +201,99 @@ function SectionView({ lesson, section, progress, query, onProgress, busy }: { l
         The section is rewritten from your source material. The current text is saved in version history first.
       </ConfirmModal>
     </section>
+  );
+}
+
+type RailTab = 'concepts' | 'ask' | 'sources';
+
+/** Right rail as tabs instead of four stacked cards: concepts, the AI teacher and the source material. */
+function LessonRail({ lesson, current, relatedCards }: { lesson: Lesson; current?: LessonSection; relatedCards: Flashcard[] }) {
+  const [tab, setTab] = useState<RailTab>('concepts');
+  const tabs: { id: RailTab; label: string }[] = [
+    { id: 'concepts', label: 'Concepts' },
+    { id: 'ask', label: 'Ask AI' },
+    { id: 'sources', label: 'Sources' },
+  ];
+  return (
+    <div className="rounded-2xl border border-border bg-surface shadow-card flex flex-col max-h-[calc(100vh-6rem)]">
+      <div role="tablist" aria-label="Lesson tools" className="grid grid-cols-3 gap-1 p-1.5 border-b border-border">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={cn('rounded-lg py-1.5 text-[13px] font-medium', tab === t.id ? 'bg-primary-soft text-primary' : 'text-muted hover:text-text')}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="overflow-y-auto p-4 space-y-5">
+        {current && <p className="text-xs text-muted">Showing: <span className="text-text font-medium">{current.title}</span></p>}
+        {tab === 'concepts' && current && (
+          <>
+            <div>
+              <p className="text-sm font-semibold mb-2">Key concepts</p>
+              <div className="flex flex-wrap gap-1.5">
+                {current.keyConcepts.length ? current.keyConcepts.map((k) => <Badge key={k} tone="primary">{k}</Badge>) : <span className="text-sm text-muted">None listed</span>}
+              </div>
+              {lesson.keyTerms.filter((t) => current.keyConcepts.some((k) => t.term.startsWith(k))).slice(0, 4).map((t) => (
+                <p key={t.term} className="text-xs text-muted mt-2.5 leading-relaxed">
+                  <span className="text-text font-medium">{t.term}:</span> {t.definition}
+                </p>
+              ))}
+            </div>
+            {current.warnings.length > 0 && (
+              <div className="rounded-xl bg-warning/5 border border-warning/30 p-3">
+                <p className="text-sm font-semibold mb-1.5 flex items-center gap-2 text-warning">
+                  <AlertTriangle className="h-4 w-4" /> Important warnings
+                </p>
+                <ul className="list-disc pl-5 text-sm space-y-1">
+                  {current.warnings.map((w) => (
+                    <li key={w}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {relatedCards.length > 0 && (
+              <div>
+                <p className="text-sm font-semibold mb-2">Related flashcards</p>
+                <ul className="space-y-2">
+                  {relatedCards.map((c) => (
+                    <li key={c._id} className="text-sm rounded-lg bg-surface-2 px-3 py-2">
+                      <details>
+                        <summary className="cursor-pointer">{c.front}</summary>
+                        <p className="text-muted mt-1">{c.back}</p>
+                      </details>
+                    </li>
+                  ))}
+                </ul>
+                <Link to={`/revision?tab=flashcards&lessonId=${lesson._id}`} className="text-xs text-primary mt-2 inline-block">
+                  Study all flashcards
+                </Link>
+              </div>
+            )}
+          </>
+        )}
+        {tab === 'ask' && <AskPanel lessonId={lesson._id} sectionId={current?.id} sectionTitle={current?.title} concepts={current?.keyConcepts} />}
+        {tab === 'sources' &&
+          (current && current.sourceRefs.length > 0 ? (
+            <div>
+              <p className="text-sm font-semibold mb-2">Source references</p>
+              <ul className="space-y-2.5">
+                {current.sourceRefs.slice(0, 8).map((r, i) => (
+                  <li key={i} className="text-xs text-muted border-l-2 border-primary/40 pl-3 leading-relaxed">
+                    <span className="text-text font-medium">Chunk {r.chunkIndex + 1}</span> — {r.excerpt}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="text-sm text-muted">No source references for this section.</p>
+          ))}
+      </div>
+    </div>
   );
 }
 
@@ -298,40 +396,30 @@ export function LessonViewerPage() {
 
   return (
     <div>
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-5">
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-6">
         <div className="min-w-0">
-          <Link to={`/projects/${lesson.projectId}`} className="text-xs uppercase tracking-widest text-primary">
-            {lesson.subject || 'Lesson'}
-          </Link>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{lesson.title}</h1>
-          <p className="text-sm text-muted mt-1">
-            {lesson.sections.length} sections · {done} understood · version {lesson.version}
-            {lesson.generationStatus === 'partial' && ' · some media still needs a retry'}
-          </p>
+          <nav aria-label="Breadcrumb" className="text-[13px] text-muted mb-2">
+            <Link to="/library" className="hover:text-text">
+              Library
+            </Link>
+            <span className="mx-1.5">/</span>
+            <Link to={`/projects/${lesson.projectId}`} className="hover:text-text">
+              {lesson.subject || 'Lesson'}
+            </Link>
+          </nav>
+          <h1 className="text-[28px] sm:text-[34px] font-bold tracking-tight leading-tight">{lesson.title}</h1>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-muted">
+            <span>{lesson.sections.length} sections</span>
+            <span aria-hidden>·</span>
+            <span>
+              {done} of {lesson.sections.length} understood
+            </span>
+            <span aria-hidden>·</span>
+            <span>version {lesson.version}</span>
+            {lesson.generationStatus === 'partial' && <Badge tone="warning">some media still needs a retry</Badge>}
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <div className="relative">
-            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search this lesson"
-              aria-label="Search within lesson"
-              className="h-10 w-56 rounded-lg border border-border bg-surface pl-9 pr-3 text-sm focus:border-primary focus:outline-none"
-            />
-            {query && <span className="absolute -bottom-5 left-1 text-xs text-muted">{matchCount} matching sections</span>}
-          </div>
-          {lesson.diagrams.length > 0 && (
-            <ButtonLink to={`/lessons/${lesson._id}/diagrams`} variant="outline" icon={<Network className="h-4 w-4" />}>
-              Diagrams
-            </ButtonLink>
-          )}
-          <ButtonLink to={`/lessons/${lesson._id}/gallery`} variant="outline" icon={<ImageIcon className="h-4 w-4" />}>
-            Gallery
-          </ButtonLink>
-          <Button variant="outline" icon={<History className="h-4 w-4" />} onClick={() => setHistoryOpen(true)}>
-            History
-          </Button>
           {editing ? (
             <Button
               variant="secondary"
@@ -350,6 +438,18 @@ export function LessonViewerPage() {
               Edit
             </Button>
           )}
+          <Menu
+            label="More lesson actions"
+            trigger={<MoreHorizontal className="h-4 w-4" />}
+            triggerClassName={buttonClass('outline', 'icon', 'h-10 w-10')}
+            items={[
+              ...(lesson.diagrams.length ? [{ label: 'Diagrams', icon: <Network />, to: `/lessons/${lesson._id}/diagrams` }] : []),
+              { label: 'Gallery', icon: <ImageIcon />, to: `/lessons/${lesson._id}/gallery` },
+              { label: 'History', icon: <History />, onSelect: () => setHistoryOpen(true) },
+              { label: 'Flashcards & quizzes', icon: <Layers />, to: `/revision?tab=flashcards&lessonId=${lesson._id}` },
+              { label: 'Project & exports', icon: <FileText />, to: `/projects/${lesson.projectId}` },
+            ]}
+          />
           <ButtonLink to={`/lessons/${lesson._id}/present`} icon={<Play className="h-4 w-4" />}>
             Play presentation
           </ButtonLink>
@@ -361,21 +461,40 @@ export function LessonViewerPage() {
         </p>
       )}
       {lesson.warnings.length > 0 && !editing && (
-        <div className="mb-4 space-y-2">
-          {lesson.warnings.map((w) => (
-            <Alert key={w} tone="warning">
-              {w}
-            </Alert>
-          ))}
-        </div>
+        <details className="mb-5 rounded-xl border border-warning/30 bg-warning/5 px-4 py-2.5 text-sm">
+          <summary className="cursor-pointer flex items-center gap-2 text-warning font-medium">
+            <Info className="h-4 w-4" /> {lesson.warnings.length} note{lesson.warnings.length === 1 ? '' : 's'} about this lesson
+          </summary>
+          <ul className="mt-2 mb-1 list-disc pl-6 space-y-1 text-text/90">
+            {lesson.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </details>
       )}
 
-      <div className="grid lg:grid-cols-[230px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_300px] gap-5">
-        <nav aria-label="Lesson outline" className="lg:sticky lg:top-20 lg:self-start">
-          <div className="rounded-xl border border-border bg-surface p-3">
-            <p className="text-xs uppercase tracking-wider text-muted px-2 mb-2">Outline</p>
-            <div className="h-1.5 rounded-full bg-border mx-2 mb-3 overflow-hidden" role="progressbar" aria-valuenow={done} aria-valuemax={lesson.sections.length} aria-label="Sections understood">
-              <div className="h-full bg-success" style={{ width: `${(done / Math.max(1, lesson.sections.length)) * 100}%` }} />
+      <div className="grid lg:grid-cols-[230px_minmax(0,1fr)] xl:grid-cols-[230px_minmax(0,1fr)_320px] gap-6">
+        <nav aria-label="Lesson outline" className="lg:sticky lg:top-20 lg:self-start space-y-3">
+          <div className="relative">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search this lesson"
+              aria-label="Search within lesson"
+              className="h-9 w-full rounded-[10px] border border-border bg-surface pl-9 pr-3 text-sm shadow-card focus:border-primary focus:outline-none"
+            />
+          </div>
+          {query && <p className="text-xs text-muted px-1">{matchCount} matching sections</p>}
+          <div className="rounded-2xl border border-border bg-surface p-3 shadow-card">
+            <div className="flex items-center justify-between px-2 mb-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">Outline</p>
+              <span className="text-[11px] text-muted tabular-nums">
+                {done}/{lesson.sections.length}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-surface-2 mx-2 mb-3 overflow-hidden" role="progressbar" aria-valuenow={done} aria-valuemax={lesson.sections.length} aria-label="Sections understood">
+              <div className="h-full bg-success rounded-full" style={{ width: `${(done / Math.max(1, lesson.sections.length)) * 100}%` }} />
             </div>
             <ol className="space-y-0.5">
               {sections.map((s, i) => {
@@ -384,7 +503,7 @@ export function LessonViewerPage() {
                   <li key={s.id}>
                     <button
                       onClick={() => jump(s.id)}
-                      className={cn('w-full text-left flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2', current?.id === s.id && 'bg-surface-2 text-primary')}
+                      className={cn('w-full text-left flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2', current?.id === s.id && 'bg-primary-soft text-primary font-medium')}
                     >
                       {isDone ? <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" /> : <span className="text-muted text-xs w-4 shrink-0 mt-0.5">{i + 1}</span>}
                       <span className="flex-1">{s.title}</span>
@@ -399,8 +518,8 @@ export function LessonViewerPage() {
 
         <div className="space-y-5 min-w-0">
           {lesson.learningObjectives.length > 0 && !editing && (
-            <div className="rounded-xl border border-border bg-surface p-5">
-              <p className="text-sm font-semibold mb-2">Learning objectives</p>
+            <div className="rounded-2xl border border-border bg-surface p-6 shadow-card">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-3">You will learn to</p>
               <ul className="list-disc pl-5 text-sm space-y-1 text-text/90">
                 {lesson.learningObjectives.map((o) => (
                   <li key={o}>{o}</li>
@@ -419,65 +538,8 @@ export function LessonViewerPage() {
           )}
         </div>
 
-        <aside className="hidden xl:block space-y-4 xl:sticky xl:top-20 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
-          {current && (
-            <div className="rounded-xl border border-border bg-surface p-4">
-              <p className="text-sm font-semibold mb-2">Key concepts</p>
-              <div className="flex flex-wrap gap-1.5">
-                {current.keyConcepts.length ? current.keyConcepts.map((k) => <Badge key={k} tone="primary">{k}</Badge>) : <span className="text-sm text-muted">None listed</span>}
-              </div>
-              {lesson.keyTerms.filter((t) => current.keyConcepts.some((k) => t.term.startsWith(k))).slice(0, 4).map((t) => (
-                <p key={t.term} className="text-xs text-muted mt-2">
-                  <span className="text-text font-medium">{t.term}:</span> {t.definition}
-                </p>
-              ))}
-            </div>
-          )}
-          {relatedCards.length > 0 && (
-            <div className="rounded-xl border border-border bg-surface p-4">
-              <p className="text-sm font-semibold mb-2">Related flashcards</p>
-              <ul className="space-y-2">
-                {relatedCards.map((c) => (
-                  <li key={c._id} className="text-sm">
-                    <details>
-                      <summary className="cursor-pointer">{c.front}</summary>
-                      <p className="text-muted mt-1">{c.back}</p>
-                    </details>
-                  </li>
-                ))}
-              </ul>
-              <Link to={`/revision?tab=flashcards&lessonId=${lesson._id}`} className="text-xs text-primary mt-2 inline-block">
-                Study all flashcards
-              </Link>
-            </div>
-          )}
-          <div className="rounded-xl border border-border bg-surface p-4">
-            <AskPanel lessonId={lesson._id} sectionId={current?.id} sectionTitle={current?.title} />
-          </div>
-          {current && current.warnings.length > 0 && (
-            <div className="rounded-xl border border-warning/40 bg-warning/5 p-4">
-              <p className="text-sm font-semibold mb-2 flex items-center gap-2 text-warning">
-                <AlertTriangle className="h-4 w-4" /> Important warnings
-              </p>
-              <ul className="list-disc pl-5 text-sm space-y-1">
-                {current.warnings.map((w) => (
-                  <li key={w}>{w}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {current && current.sourceRefs.length > 0 && (
-            <div className="rounded-xl border border-border bg-surface p-4">
-              <p className="text-sm font-semibold mb-2">Source references</p>
-              <ul className="space-y-2">
-                {current.sourceRefs.slice(0, 5).map((r, i) => (
-                  <li key={i} className="text-xs text-muted border-l-2 border-border pl-2">
-                    <span className="text-text">Chunk {r.chunkIndex + 1}</span> — {r.excerpt}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+        <aside className="hidden xl:block xl:sticky xl:top-20 xl:self-start">
+          <LessonRail lesson={lesson} current={current} relatedCards={relatedCards} />
         </aside>
       </div>
       <VersionHistory lessonId={lesson._id} open={historyOpen} onClose={() => setHistoryOpen(false)} />

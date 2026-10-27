@@ -7,6 +7,7 @@ import { api } from '../../lib/api';
 import { Card, CardTitle, PageHeader, Stat } from '../../components/ui/Card';
 import { EmptyState, ErrorState, PageLoader, StatusBadge } from '../../components/ui/Feedback';
 import { formatDuration, timeAgo } from '../../utils/format';
+import { useThemeColors } from '../../hooks/useThemeColors';
 import type { WeakTopic } from '../../types/models';
 
 interface Summary {
@@ -29,8 +30,6 @@ interface Summary {
   weakTopics: WeakTopic[];
 }
 
-// Chart tokens: one hue per single-series chart, recessive grid and axes (validated for the dark surface).
-const C = { study: '#38BDF8', quiz: '#8B5CF6', grid: '#1e2a42', axis: '#94A3B8', surface: '#121b30' };
 
 function ChartTooltip({ active, payload, label, unit }: TooltipProps<number, string> & { unit: string }) {
   if (!active || !payload?.length) return null;
@@ -89,6 +88,9 @@ function ChartCard({ title, icon, children, empty }: { title: string; icon: Reac
 
 /** Screen 11 — Learning Progress. Every metric reflects real activity. */
 export function ProgressPage() {
+  // Chart tokens: one hue per single-series chart, recessive grid and axes, taken from the active theme.
+  const t0 = useThemeColors();
+  const C = { study: t0.primary, quiz: t0.secondary, grid: t0.border, axis: t0.muted, surface: t0.surface };
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ['progress-summary'], queryFn: () => api.get<Summary>('/progress/summary') });
 
   // Fill the last 30 days so gaps show as zero-height bars, not missing days.
@@ -138,7 +140,7 @@ export function ProgressPage() {
                 <CartesianGrid vertical={false} stroke={C.grid} />
                 <XAxis dataKey="label" tick={{ fill: C.axis, fontSize: 11 }} tickLine={false} axisLine={{ stroke: C.grid }} interval={6} />
                 <YAxis allowDecimals={false} tick={{ fill: C.axis, fontSize: 11 }} tickLine={false} axisLine={false} />
-                <Tooltip cursor={{ fill: 'rgba(148,163,184,0.08)' }} content={<ChartTooltip unit=" min" />} />
+                <Tooltip cursor={{ fill: C.grid, opacity: 0.4 }} content={<ChartTooltip unit=" min" />} />
                 <Bar dataKey="minutes" fill={C.study} radius={[4, 4, 0, 0]} maxBarSize={18} />
               </BarChart>
             </ResponsiveContainer>

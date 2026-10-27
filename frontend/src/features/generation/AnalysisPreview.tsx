@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Field';
 import { Alert, Badge } from '../../components/ui/Feedback';
 import { cn } from '../../lib/cn';
+import { Steps } from '../../components/ui/Steps';
 
 const DIAGRAM_TYPES = ['flowchart', 'architecture', 'data-flow', 'entity-relationship', 'sequence', 'concept-map', 'decision-flow'];
 
@@ -43,7 +44,7 @@ export function AnalysisPreview({
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow="Step 2 of 3 · Review the plan"
+        eyebrow={<Steps current={1} />}
         title="Content analysis"
         description="Check the plan before diagrams, illustrations and narration are generated. Edit the title or remove sections you do not need; everything else is automatic."
         actions={

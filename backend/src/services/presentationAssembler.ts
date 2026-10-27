@@ -63,7 +63,7 @@ function base(id: string, type: SlideType, title: string, sectionId = ''): Omit<
     timeline: [],
     terminal: [],
     events: [{ atMs: 0, type: 'reveal', targetId: 'title', durationMs: 800 }],
-    narration: { text: '', captions: [], timing: 'estimated' },
+    narration: { text: '', captions: [], words: [], timing: 'estimated' },
     speakerNotes: '',
   };
 }

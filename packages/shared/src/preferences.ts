@@ -23,6 +23,8 @@ export const UserPreferencesSchema = z.object({
   visualMode: VisualModeSchema.default('both'),
   playbackSpeed: z.number().min(0.75).max(1.5).default(1),
   captions: z.boolean().default(true),
+  /** Neural narration voice (empty = chosen automatically from the lesson language). */
+  narrationVoice: z.string().max(80).default(''),
 });
 
 export type Language = z.infer<typeof LanguageSchema>;

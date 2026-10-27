@@ -7,23 +7,23 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
 type Size = 'sm' | 'md' | 'lg' | 'icon';
 
 const variants: Record<Variant, string> = {
-  primary: 'bg-primary text-bg hover:bg-primary/90 font-semibold shadow-[0_0_20px_-6px_var(--color-primary)]',
-  secondary: 'bg-secondary text-white hover:bg-secondary/90 font-semibold',
-  outline: 'border border-border bg-surface hover:bg-surface-2 text-text',
+  primary: 'bg-primary text-primary-fg hover:brightness-110 font-semibold shadow-card',
+  secondary: 'bg-secondary-soft text-secondary hover:brightness-95 font-semibold',
+  outline: 'border border-border bg-surface hover:bg-surface-2 text-text shadow-card',
   ghost: 'text-muted hover:text-text hover:bg-surface-2',
-  danger: 'bg-error/15 text-error border border-error/40 hover:bg-error/25',
+  danger: 'bg-error/10 text-error border border-error/30 hover:bg-error/15',
 };
 
 const sizes: Record<Size, string> = {
-  sm: 'h-8 px-3 text-sm gap-1.5',
+  sm: 'h-8 px-3 text-[13px] gap-1.5',
   md: 'h-10 px-4 text-sm gap-2',
-  lg: 'h-12 px-6 text-base gap-2',
+  lg: 'h-12 px-6 text-[15px] gap-2',
   icon: 'h-9 w-9 justify-center',
 };
 
 export function buttonClass(variant: Variant = 'primary', size: Size = 'md', className?: string) {
   return cn(
-    'inline-flex items-center justify-center rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap',
+    'inline-flex items-center justify-center rounded-[10px] transition-all disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap active:scale-[0.98]',
     variants[variant],
     sizes[size],
     className,

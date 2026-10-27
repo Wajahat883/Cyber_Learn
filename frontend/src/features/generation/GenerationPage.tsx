@@ -8,6 +8,7 @@ import { Card, PageHeader } from '../../components/ui/Card';
 import { Button, ButtonLink } from '../../components/ui/Button';
 import { Alert, ErrorState, PageLoader, StageIcon, StatusBadge } from '../../components/ui/Feedback';
 import { cn } from '../../lib/cn';
+import { Steps } from '../../components/ui/Steps';
 import type { Generation } from '../../types/models';
 import { AnalysisPreview } from './AnalysisPreview';
 import { useGenerationStream } from './useGenerationStream';
@@ -70,13 +71,14 @@ export function GenerationPage() {
 
   return (
     <div className="space-y-5 max-w-4xl">
+      <Steps current={running ? 2 : 3} />
       <PageHeader
         eyebrow={
           <Link to={`/projects/${data.project._id}`} className="hover:underline">
             {data.project.title}
           </Link>
         }
-        title="Generating your learning experience"
+        title={running ? 'Generating your learning experience' : currentStatus === 'failed' ? 'Generation stopped' : 'Your lesson is ready'}
         description={running ? 'You can leave this page; generation continues in the background.' : undefined}
         actions={
           <>

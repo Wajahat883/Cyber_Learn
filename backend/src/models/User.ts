@@ -13,9 +13,19 @@ const userSchema = new Schema(
       visualMode: { type: String, enum: ['diagrams', 'illustrations', 'both'], default: 'both' },
       playbackSpeed: { type: Number, default: 1 },
       captions: { type: Boolean, default: true },
+      narrationVoice: { type: String, default: '' },
     },
     resetTokenHash: { type: String, select: false },
     resetTokenExpiresAt: { type: Date, select: false },
+    /** AI provider chosen in Settings. The API key is stored encrypted and never returned. */
+    aiSettings: {
+      provider: { type: String, default: '' },
+      model: { type: String, default: '' },
+      baseUrl: { type: String, default: '' },
+      apiKeyEnc: { type: String, default: '', select: false },
+      keyHint: { type: String, default: '' },
+      updatedAt: { type: Date, default: null },
+    },
     /** Bumped on logout-everywhere / password change to invalidate existing sessions. */
     sessionVersion: { type: Number, default: 0 },
     usage: {

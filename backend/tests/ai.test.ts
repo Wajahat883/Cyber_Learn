@@ -87,3 +87,37 @@ describe('OpenAI-compatible provider (OpenCode, OpenAI, Ollama...)', () => {
     }
   });
 });
+
+describe('provider output limits', () => {
+  it('learns a smaller max_tokens limit from the provider and retries', async () => {
+    const limits: number[] = [];
+    const server = http.createServer((req, res) => {
+      let raw = '';
+      req.on('data', (c) => (raw += c));
+      req.on('end', () => {
+        const body = JSON.parse(raw) as { max_tokens: number };
+        limits.push(body.max_tokens);
+        if (body.max_tokens > 4096) {
+          res.writeHead(400, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: '`max_tokens` must be less than or equal to `4096`, the maximum value for `max_tokens` is less than the `context_window` for this model', type: 'invalid_request_error' } }));
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ choices: [{ message: { content: '{"title":"Logs","count":1}' }, finish_reason: 'stop' }] }));
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, () => r()));
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`;
+    try {
+      const provider = new OpenAICompatibleTextProvider(url, 'k', 'small-model');
+      expect((await provider.generateStructured(request)).data).toEqual({ title: 'Logs', count: 1 });
+      expect(limits).toEqual([16000, 4096]);
+      // The learned limit is reused, so later requests succeed first time.
+      await provider.generateStructured(request);
+      expect(limits.at(-1)).toBe(4096);
+      expect(limits).toHaveLength(3);
+    } finally {
+      server.close();
+    }
+  });
+});

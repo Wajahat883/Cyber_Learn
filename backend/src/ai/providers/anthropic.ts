@@ -12,13 +12,26 @@ export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5';
  */
 export class AnthropicTextProvider implements TextGenerationProvider {
   readonly name = 'anthropic';
-  readonly model = env.AI_TEXT_MODEL || DEFAULT_ANTHROPIC_MODEL;
-  private readonly client = new Anthropic({
-    apiKey: env.AI_TEXT_API_KEY || undefined,
-    baseURL: env.AI_TEXT_BASE_URL || undefined,
-    timeout: env.AI_REQUEST_TIMEOUT_MS,
-    maxRetries: 2,
-  });
+  readonly model: string;
+  private readonly client: Anthropic;
+
+  /** Without options the server configuration (.env) is used; a user's own settings never inherit it. */
+  constructor(options?: { apiKey: string; model?: string }) {
+    this.model = options ? options.model || DEFAULT_ANTHROPIC_MODEL : env.AI_TEXT_MODEL || DEFAULT_ANTHROPIC_MODEL;
+    this.client = new Anthropic({
+      apiKey: options ? options.apiKey : env.AI_TEXT_API_KEY || undefined,
+      baseURL: options ? undefined : env.AI_TEXT_BASE_URL || undefined,
+      timeout: env.AI_REQUEST_TIMEOUT_MS,
+      maxRetries: 2,
+    });
+  }
+
+  /** Model ids the key can use (for the Settings model picker). */
+  async listModels(): Promise<string[]> {
+    const ids: string[] = [];
+    for await (const model of this.client.models.list()) ids.push(model.id);
+    return ids;
+  }
 
   generateStructured<T>(request: StructuredRequest<T>) {
     return runStructured(async (system, user, maxTokens) => {

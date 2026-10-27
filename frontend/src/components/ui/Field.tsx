@@ -2,11 +2,11 @@ import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type Selec
 import { cn } from '../../lib/cn';
 
 const control =
-  'w-full rounded-lg border border-border bg-bg/60 px-3 py-2 text-sm text-text placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60';
+  'w-full rounded-[10px] border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted/70 shadow-card transition-shadow focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15 disabled:opacity-60';
 
 export function Label({ htmlFor, children, hint }: { htmlFor?: string; children: ReactNode; hint?: ReactNode }) {
   return (
-    <label htmlFor={htmlFor} className="block text-sm font-medium mb-1.5">
+    <label htmlFor={htmlFor} className="block text-[13px] font-medium mb-1.5 text-text">
       {children}
       {hint && <span className="text-muted font-normal ml-2">{hint}</span>}
     </label>
@@ -100,7 +100,7 @@ export function Toggle({ checked, onChange, label, description }: { checked: boo
         role="switch"
         aria-checked={checked}
         onClick={() => onChange(!checked)}
-        className={cn('relative h-6 w-11 rounded-full transition-colors shrink-0', checked ? 'bg-primary' : 'bg-border')}
+        className={cn('relative h-6 w-11 rounded-full transition-colors shrink-0', checked ? 'bg-primary' : 'bg-muted/40')}
       >
         <span className={cn('absolute left-0 top-0.5 h-5 w-5 rounded-full bg-white transition-transform', checked ? 'translate-x-5' : 'translate-x-0.5')} />
       </button>
@@ -113,7 +113,7 @@ export function Segmented<T extends string>({ value, onChange, options, label }:
   return (
     <div>
       <Label>{label}</Label>
-      <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap rounded-lg border border-border bg-bg/60 p-1 gap-1">
+      <div role="radiogroup" aria-label={label} className="inline-flex flex-wrap rounded-xl bg-surface-2 p-1 gap-1">
         {options.map((o) => (
           <button
             key={o.value}
@@ -122,8 +122,8 @@ export function Segmented<T extends string>({ value, onChange, options, label }:
             aria-checked={value === o.value}
             onClick={() => onChange(o.value)}
             className={cn(
-              'px-3 py-1.5 rounded-md text-sm transition-colors',
-              value === o.value ? 'bg-primary/15 text-primary border border-primary/40' : 'text-muted hover:text-text border border-transparent',
+              'px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all',
+              value === o.value ? 'bg-surface text-text shadow-card' : 'text-muted hover:text-text',
             )}
           >
             {o.label}

@@ -68,7 +68,7 @@ export function QuestionCard({
         )}
       </div>
       <Markdown className="font-medium">{question.prompt}</Markdown>
-      {question.context && <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-border bg-[#070b16] p-3 text-[13px] font-mono text-text/90">{question.context}</pre>}
+      {question.context && <pre className="mt-3 whitespace-pre-wrap rounded-xl bg-code p-3 text-[13px] font-mono text-code-fg">{question.context}</pre>}
       <div className="mt-4">
         {choice ? (
           <div role="radiogroup" className="space-y-2">
@@ -97,7 +97,7 @@ export function QuestionCard({
             rows={4}
             aria-label="Your answer"
             placeholder="Write your answer…"
-            className="w-full rounded-lg border border-border bg-bg/60 px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
           />
         )}
       </div>

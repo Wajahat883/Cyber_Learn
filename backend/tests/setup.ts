@@ -11,6 +11,7 @@ process.env.AI_SPEECH_PROVIDER = 'browser';
 process.env.STORAGE_DRIVER = 'local';
 process.env.STORAGE_LOCAL_DIR = mkdtempSync(path.join(tmpdir(), 'cyberlearn-test-'));
 process.env.APP_ORIGIN = 'http://localhost:5173';
+process.env.OLLAMA_BASE_URL = 'http://127.0.0.1:11999/v1';
 
 const { default: mongoose } = await import('mongoose');
 

@@ -38,11 +38,18 @@ export interface ImageGenerationProvider {
   generateImage(input: { prompt: string; title: string; concepts: string[]; aspectRatio?: string }): Promise<{ body: Buffer; mimeType: string }>;
 }
 
+export interface SpeechResult {
+  body: Buffer;
+  mimeType: string;
+  /** Word boundaries in ms from the start of the audio, when the engine provides them. */
+  words?: { startMs: number; endMs: number; text: string }[];
+}
+
 export interface SpeechProvider {
   readonly name: string;
   /** False when narration is spoken by the browser instead of stored audio. */
   readonly producesAudio: boolean;
-  synthesize(input: { text: string; language: string }): Promise<{ body: Buffer; mimeType: string } | null>;
+  synthesize(input: { text: string; language: string; voice?: string }): Promise<SpeechResult | null>;
 }
 
 /** Provider failure. `retryable` covers rate limits, timeouts and server errors. */

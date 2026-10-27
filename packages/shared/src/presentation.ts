@@ -32,10 +32,18 @@ export const CaptionSchema = z.object({
   text: z.string().min(1).max(500),
 });
 
+/** Word-level timing from the speech engine, used for word-by-word captions. */
+export const WordTimingSchema = z.object({
+  startMs: z.number().int().nonnegative(),
+  endMs: z.number().int().nonnegative(),
+  text: z.string().min(1).max(120),
+});
+
 export const NarrationSchema = z.object({
   text: z.string().max(5000).default(''),
   audioAssetId: z.string().max(40).optional(),
   captions: z.array(CaptionSchema).max(200).default([]),
+  words: z.array(WordTimingSchema).max(3000).default([]),
   /** "provider" when the TTS service returned timings, "estimated" when derived from text length. */
   timing: z.enum(['provider', 'estimated']).default('estimated'),
 });
@@ -74,7 +82,7 @@ export const SlideSchema = z.object({
     .default([]),
   durationMs: z.number().int().min(2000).max(180000),
   events: z.array(AnimationEventSchema).max(80).default([]),
-  narration: NarrationSchema.default({ text: '', captions: [], timing: 'estimated' }),
+  narration: NarrationSchema.default({ text: '', captions: [], words: [], timing: 'estimated' }),
   speakerNotes: z.string().max(5000).default(''),
 });
 
@@ -136,6 +144,7 @@ export type SlideType = z.infer<typeof SlideTypeSchema>;
 export type AnimationEventType = z.infer<typeof AnimationEventTypeSchema>;
 export type AnimationEvent = z.infer<typeof AnimationEventSchema>;
 export type Caption = z.infer<typeof CaptionSchema>;
+export type WordTiming = z.infer<typeof WordTimingSchema>;
 export type Narration = z.infer<typeof NarrationSchema>;
 export type Slide = z.infer<typeof SlideSchema>;
 export type PresentationManifest = z.infer<typeof PresentationManifestSchema>;

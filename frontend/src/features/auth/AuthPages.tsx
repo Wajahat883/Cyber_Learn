@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ForgotPasswordSchema, LoginSchema, RegisterSchema } from '@cyberlearn/shared';
-import { ShieldCheck } from 'lucide-react';
+import { FileText, Layers, Network, ShieldCheck } from 'lucide-react';
 import { api, ApiError, errorMessage } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Field';
@@ -12,23 +12,53 @@ import { Alert, PageLoader } from '../../components/ui/Feedback';
 import type { User } from '../../types/models';
 import { useAuth } from './AuthContext';
 
+const HIGHLIGHTS = [
+  { icon: FileText, text: 'Paste notes or upload PDF, DOCX, TXT and Markdown' },
+  { icon: Network, text: 'Lessons, validated diagrams and animated slides' },
+  { icon: Layers, text: 'Flashcards, quizzes and spaced repetition' },
+];
+
 function AuthShell({ title, subtitle, children, footer }: { title: string; subtitle: string; children: ReactNode; footer: ReactNode }) {
   return (
-    <div className="min-h-full flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_top,rgba(56,189,248,0.12),transparent_60%)]">
-      <div className="w-full max-w-md">
-        <div className="flex items-center gap-2 justify-center mb-8">
-          <ShieldCheck className="h-8 w-8 text-primary" />
-          <span className="text-2xl font-bold tracking-tight">
-            CyberLearn <span className="text-primary">AI</span>
+    <div className="min-h-full grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      <aside className="hidden lg:flex flex-col justify-between bg-stage text-white p-12 relative overflow-hidden">
+        <div className="absolute -left-24 -bottom-24 h-96 w-96 rounded-full bg-[#2dd4bf]/20 blur-3xl" aria-hidden />
+        <div className="absolute right-0 top-0 h-80 w-80 rounded-full bg-[#a78bfa]/20 blur-3xl" aria-hidden />
+        <div className="relative flex items-center gap-2.5">
+          <span className="h-9 w-9 rounded-[10px] bg-[#2dd4bf] text-[#04201d] flex items-center justify-center">
+            <ShieldCheck className="h-5 w-5" />
           </span>
+          <span className="font-display font-bold text-lg">CyberLearn</span>
         </div>
-        <div className="rounded-2xl border border-border bg-surface/90 p-6 sm:p-8 shadow-2xl shadow-black/30">
-          <h1 className="text-xl font-semibold">{title}</h1>
-          <p className="text-muted text-sm mt-1 mb-6">{subtitle}</p>
+        <div className="relative max-w-md">
+          <h2 className="text-4xl font-bold leading-tight tracking-tight">Your notes in. A lesson you can watch, read and practise out.</h2>
+          <ul className="mt-10 space-y-4">
+            {HIGHLIGHTS.map(({ icon: Icon, text }) => (
+              <li key={text} className="flex items-center gap-3 text-white/80">
+                <span className="h-9 w-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                  <Icon className="h-4 w-4 text-[#2dd4bf]" />
+                </span>
+                {text}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="relative text-sm text-white/50">Built for SOC, pentesting, cloud security — and any subject you study.</p>
+      </aside>
+      <main className="flex items-center justify-center p-6 sm:p-10">
+        <div className="w-full max-w-sm">
+          <div className="flex items-center gap-2.5 mb-10 lg:hidden">
+            <span className="h-9 w-9 rounded-[10px] bg-primary text-primary-fg flex items-center justify-center">
+              <ShieldCheck className="h-5 w-5" />
+            </span>
+            <span className="font-display font-bold text-lg">CyberLearn</span>
+          </div>
+          <h1 className="text-[28px] font-bold tracking-tight">{title}</h1>
+          <p className="text-muted mt-1.5 mb-8">{subtitle}</p>
           {children}
+          <div className="text-sm text-muted mt-8">{footer}</div>
         </div>
-        <div className="text-center text-sm text-muted mt-6">{footer}</div>
-      </div>
+      </main>
     </div>
   );
 }

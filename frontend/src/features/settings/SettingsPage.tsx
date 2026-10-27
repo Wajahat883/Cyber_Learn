@@ -12,6 +12,8 @@ import { Modal } from '../../components/ui/Modal';
 import { formatBytes, timeAgo } from '../../utils/format';
 import { useAuth } from '../auth/AuthContext';
 import type { User } from '../../types/models';
+import { AiProviderCard } from './AiProviderCard';
+import { VoiceCard } from './VoiceCard';
 
 interface Overview {
   usage: { generations: number; aiCalls: number; inputChars: number; outputChars: number };
@@ -175,14 +177,16 @@ export function SettingsPage() {
           <SecurityCard />
         </div>
         <div className="space-y-5">
+          <AiProviderCard />
+          <VoiceCard />
           {isLoading || !data ? (
             <PageLoader />
           ) : (
             <>
               <Card>
-                <CardTitle icon={<Cpu className="h-4 w-4" />}>AI providers</CardTitle>
+                <CardTitle icon={<Cpu className="h-4 w-4" />}>Server services</CardTitle>
                 <dl className="grid grid-cols-[110px_1fr] gap-y-2 text-sm">
-                  <dt className="text-muted">Text</dt>
+                  <dt className="text-muted">Text AI</dt>
                   <dd>
                     {data.providers.text.provider} <span className="text-muted">· {data.providers.text.model}</span> {!data.providers.text.configured && <Badge tone="warning">not configured</Badge>}
                   </dd>
@@ -193,14 +197,7 @@ export function SettingsPage() {
                   <dt className="text-muted">File storage</dt>
                   <dd>{data.providers.storage}</dd>
                 </dl>
-                <p className="text-xs text-muted mt-3">
-                  Providers and API keys are configured on the server in <code>.env</code> (see <code>.env.example</code>). Keys are never sent to the browser.
-                </p>
-                {data.providers.text.provider === 'mock' && (
-                  <div className="mt-3">
-                    <Alert tone="info">The offline provider builds lessons from your own sentences. Set AI_TEXT_PROVIDER to openai-compatible (e.g. OpenCode) or anthropic for full AI explanations.</Alert>
-                  </div>
-                )}
+                <p className="text-xs text-muted mt-3">Images, server narration audio and storage are configured by whoever runs the server, in <code>.env</code>.</p>
               </Card>
               <Card>
                 <CardTitle icon={<Database className="h-4 w-4" />}>Usage and storage</CardTitle>

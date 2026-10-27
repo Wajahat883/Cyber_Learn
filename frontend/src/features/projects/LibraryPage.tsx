@@ -10,6 +10,7 @@ import { Input, Select } from '../../components/ui/Field';
 import { EmptyState, ErrorState, PageLoader, StatusBadge, Badge } from '../../components/ui/Feedback';
 import { ConfirmModal, Modal } from '../../components/ui/Modal';
 import { cn } from '../../lib/cn';
+import { LibraryTabs } from '../../components/layout/hubs';
 import { timeAgo } from '../../utils/format';
 import type { Project } from '../../types/models';
 
@@ -35,8 +36,8 @@ function ProjectCard({ project, subjectName }: { project: Project; subjectName?:
   const remove = useMutation({ mutationFn: () => api.delete(`/projects/${project._id}`), onSuccess: invalidate });
 
   return (
-    <div className="group relative rounded-xl border border-border bg-surface hover:border-primary/40 transition-colors flex flex-col">
-      <Link to={`/projects/${project._id}`} className="p-4 flex-1">
+    <div className="group relative rounded-2xl border border-border bg-surface shadow-card hover:shadow-pop hover:-translate-y-0.5 transition-all flex flex-col">
+      <Link to={`/projects/${project._id}`} className="p-5 flex-1">
         <div className="flex items-start justify-between gap-2 pr-14">
           <h3 className="font-semibold leading-snug line-clamp-2">{project.title}</h3>
         </div>
@@ -162,7 +163,8 @@ export function LibraryPage() {
 
   return (
     <div>
-      <PageHeader eyebrow="Library" title="My Library" description="Every learning project you have created." actions={<ButtonLink to="/create" icon={<Plus className="h-4 w-4" />}>New project</ButtonLink>} />
+      <PageHeader title="Library" description="Everything you have imported and generated." actions={<ButtonLink to="/create" icon={<Plus className="h-4 w-4" />}>New lesson</ButtonLink>} />
+      <LibraryTabs active="projects" />
       <div className="flex flex-col lg:flex-row gap-3 mb-5">
         <form
           className="flex-1 min-w-0"

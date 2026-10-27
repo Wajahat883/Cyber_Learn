@@ -29,6 +29,7 @@ import { PresentationClock, type ClockState } from './clock';
 import { captionAt, frameAt } from './frame';
 import { SlideEditor } from './SlideEditor';
 import { useNarration } from './useNarration';
+import { useVoices } from '../../lib/voices';
 import { VersionsButton } from './PresentationVersions';
 
 const SPEEDS = [0.75, 1, 1.25, 1.5];
@@ -156,7 +157,7 @@ function Controls({
         <button className="p-2 rounded-lg hover:bg-surface-2" onClick={() => clock.prev()} aria-label="Previous slide" title="Previous (←)">
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <button className="p-3 rounded-full bg-primary text-bg hover:bg-primary/90" onClick={() => clock.toggle()} aria-label={playing ? 'Pause' : 'Play'} title="Play/Pause (Space)">
+        <button className="p-3 rounded-full bg-primary text-primary-fg hover:brightness-110 shadow-card" onClick={() => clock.toggle()} aria-label={playing ? 'Pause' : 'Play'} title="Play/Pause (Space)">
           {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
         </button>
         <button className="p-2 rounded-lg hover:bg-surface-2" onClick={() => clock.next()} aria-label="Next slide" title="Next (→)">
@@ -234,7 +235,8 @@ export function PlayerPage() {
     clock?.setSpeed(speed);
   }, [clock, speed]);
 
-  useNarration(clock, presentation?.manifest, { enabled: !muted, volume });
+  const voices = useVoices();
+  useNarration(clock, presentation?.manifest, { enabled: !muted, volume, voices, voiceName: user?.preferences?.narrationVoice });
 
   // Record real study activity: slide position and time spent while playing.
   const report = useMutation({ mutationFn: (body: Record<string, unknown>) => api.patch(`/lessons/${id}/progress`, body), onSuccess: () => qc.invalidateQueries({ queryKey: ['dashboard'] }) });
@@ -304,8 +306,8 @@ export function PlayerPage() {
     <div ref={container} className={cn('space-y-3', fullscreen && 'bg-bg p-4 h-full overflow-auto')}>
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-0 mr-auto">
-          <Link to={`/lessons/${id}`} className="text-xs uppercase tracking-widest text-primary">
-            Back to lesson
+          <Link to={`/lessons/${id}`} className="text-[13px] text-muted hover:text-text">
+            ← Back to lesson
           </Link>
           <h1 className="text-xl font-bold truncate">{presentation.title}</h1>
         </div>

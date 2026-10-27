@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { AskSchema, type LessonSection } from '@cyberlearn/shared';
 import { answerFromNotes } from '../../ai/askNotes.js';
-import { textProvider } from '../../ai/providers/index.js';
+import { textProviderFor } from '../../ai/providers/userProviders.js';
 import { AiOutputError, AiProviderError } from '../../ai/types.js';
 import { findOwned } from '../../middleware/authorize.js';
 import { aiLimiter } from '../../middleware/rateLimit.js';
@@ -47,7 +47,7 @@ askRouter.post('/ask', aiLimiter, validate(AskSchema), async (req, res) => {
 
   let result;
   try {
-    result = await answerFromNotes(textProvider(), { question, chunks, language: user?.preferences?.language ?? 'en' });
+    result = await answerFromNotes(await textProviderFor(ownerId), { question, chunks, language: user?.preferences?.language ?? 'en' });
   } catch (err) {
     if (err instanceof AiProviderError) throw new AppError(err.retryable ? 503 : 502, err.code, err.message);
     if (err instanceof AiOutputError) throw new AppError(502, 'AI_OUTPUT_INVALID', err.message);

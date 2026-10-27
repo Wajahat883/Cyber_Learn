@@ -36,7 +36,7 @@ export function MarkdownEditor({ value, onChange, label, placeholder }: Props) {
   return (
     <div>
       <p className="text-sm font-medium mb-1.5">{label}</p>
-      <div className="rounded-lg border border-border bg-bg/60 focus-within:border-primary">
+      <div className="rounded-[10px] border border-border bg-surface shadow-card focus-within:border-primary">
         {editor && (
           <div className="flex gap-0.5 border-b border-border px-1.5 py-1" role="toolbar" aria-label={`${label} formatting`}>
             <button type="button" className={btn(editor.isActive('bold'))} onClick={() => editor.chain().focus().toggleBold().run()} aria-label="Bold">

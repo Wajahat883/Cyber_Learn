@@ -30,15 +30,16 @@ export interface DiagramLayout {
   height: number;
 }
 
+/** Semantic node colours by role (design.md §2.1.2). */
 export const KIND_COLORS: Record<NodeKind, string> = {
-  source: '#38BDF8',
-  processor: '#8B5CF6',
-  storage: '#FBBF24',
-  destination: '#34D399',
-  actor: '#F472B6',
-  decision: '#F87171',
-  concept: '#22D3EE',
-  event: '#A3E635',
+  source: '#38BDF8', // log sources, endpoints, requests
+  processor: '#8B5CF6', // SIEM correlation, parsers, gateways
+  storage: '#34D399', // indices, databases, data lakes
+  destination: '#FBBF24', // dashboards, alerts, tickets
+  decision: '#F472B6', // triage branches, rules, auth checks
+  actor: '#22D3EE', // analyst, attacker, user, service account
+  event: '#F87171', // alerts, failed logons, intrusions
+  concept: '#94A3B8', // abstract concepts
 };
 
 /**
