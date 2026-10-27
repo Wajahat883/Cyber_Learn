@@ -163,7 +163,7 @@ export function LibraryPage() {
       <PageHeader eyebrow="Library" title="My Library" description="Every learning project you have created." actions={<ButtonLink to="/create" icon={<Plus className="h-4 w-4" />}>New project</ButtonLink>} />
       <div className="flex flex-col lg:flex-row gap-3 mb-5">
         <form
-          className="flex-1"
+          className="flex-1 min-w-0"
           onSubmit={(e) => {
             e.preventDefault();
             setParam('q', search.trim());
@@ -171,7 +171,7 @@ export function LibraryPage() {
         >
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by title, keyword or tag…" aria-label="Search projects" />
         </form>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 lg:w-[640px] lg:shrink-0">
           <Select aria-label="Filter by subject" value={subjectId} onChange={(e) => setParam('subjectId', e.target.value)}>
             <option value="">All subjects</option>
             {subjects?.map((s) => (

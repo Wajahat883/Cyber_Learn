@@ -1,0 +1,24 @@
+# Infrastructure only, for running the API and frontend with `npm run dev`.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   npm run dev
+#
+# Change the host ports if something else already listens on them, e.g.
+#   MONGO_PORT=27018 docker compose -f docker-compose.dev.yml up -d
+# and set MONGODB_URI=mongodb://localhost:27018/cyberlearn in .env.
+
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - '127.0.0.1:${MONGO_PORT:-27017}:27017'
+    volumes:
+      - mongo-dev-data:/data/db
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
+
+volumes:
+  mongo-dev-data:

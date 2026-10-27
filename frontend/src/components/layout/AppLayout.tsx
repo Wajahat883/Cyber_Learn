@@ -206,10 +206,12 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
   };
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-border bg-bg/85 backdrop-blur flex items-center gap-2 sm:gap-3 px-3 sm:px-6">
-      <button className={buttonClass('ghost', 'icon', 'lg:hidden')} onClick={onMenu} aria-label="Open navigation">
-        <Menu className="h-5 w-5" />
-      </button>
-      <form onSubmit={submit} role="search" className="flex-1 max-w-xl relative">
+      <span className="lg:hidden">
+        <button className={buttonClass('ghost', 'icon')} onClick={onMenu} aria-label="Open navigation">
+          <Menu className="h-5 w-5" />
+        </button>
+      </span>
+      <form onSubmit={submit} role="search" className="flex-1 min-w-0 max-w-xl relative">
         <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
         <input
           value={q}
@@ -232,12 +234,16 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
           </option>
         ))}
       </select>
-      <Link to="/create" className={buttonClass('primary', 'md', 'hidden sm:inline-flex')}>
-        <Plus className="h-4 w-4" /> New project
-      </Link>
-      <Link to="/create" className={buttonClass('primary', 'icon', 'sm:hidden')} aria-label="Create new project">
-        <Plus className="h-4 w-4" />
-      </Link>
+      <span className="hidden sm:block">
+        <Link to="/create" className={buttonClass('primary', 'md')}>
+          <Plus className="h-4 w-4" /> New project
+        </Link>
+      </span>
+      <span className="sm:hidden">
+        <Link to="/create" className={buttonClass('primary', 'icon')} aria-label="Create new project">
+          <Plus className="h-4 w-4" />
+        </Link>
+      </span>
       <Notifications />
       <ProfileMenu />
     </header>

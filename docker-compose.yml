@@ -1,0 +1,110 @@
+# CyberLearn AI — complete local stack.
+#
+#   cp .env.example .env        # optional: add AI provider keys
+#   docker compose up --build -d
+#   open http://localhost:8080
+#
+# Optional S3-compatible storage with MinIO instead of the local volume:
+#   STORAGE_DRIVER=s3 docker compose --profile s3 up --build -d
+
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  image: cyberlearn-backend:local
+  env_file:
+    - path: .env
+      required: false
+  environment: &backend-env
+    NODE_ENV: production
+    MONGODB_URI: mongodb://mongo:27017/cyberlearn
+    REDIS_URL: redis://redis:6379
+    # Separate from APP_ORIGIN in .env (which points at the Vite dev server).
+    APP_ORIGIN: ${DOCKER_APP_ORIGIN:-http://localhost:8080}
+    # Local-only default. Set SESSION_SECRET in .env for anything beyond your own machine.
+    SESSION_SECRET: ${SESSION_SECRET:-local-docker-only-secret-change-me-0123456789abcdef}
+    COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+    STORAGE_LOCAL_DIR: /data/storage
+    STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-http://minio:9000}
+    STORAGE_BUCKET: ${STORAGE_BUCKET:-cyberlearn}
+    STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-cyberlearn}
+    STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-cyberlearn-minio-secret}
+  volumes:
+    - storage:/data/storage
+  depends_on:
+    mongo:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      RUN_WORKER_IN_PROCESS: 'false'
+
+  worker:
+    <<: *backend
+    command: ['node', 'dist/worker.js']
+    healthcheck:
+      disable: true
+    environment:
+      <<: *backend-env
+      RUN_WORKER_IN_PROCESS: 'false'
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: cyberlearn-web:local
+    ports:
+      - '${WEB_PORT:-8080}:80'
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  minio:
+    profiles: ['s3']
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY:-cyberlearn}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY:-cyberlearn-minio-secret}
+    ports:
+      - '9001:9001'
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  redis-data:
+  storage:
+  minio-data:

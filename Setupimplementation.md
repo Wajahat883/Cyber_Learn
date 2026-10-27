@@ -34,12 +34,12 @@ Phase 0 (Docker) was added on top of the spec so the whole application runs loca
 - [x] ✅ 1.4 Dynamic Subjects & Learning Paths (Roman Urdu section 3)
 - [x] ✅ 1.5 Projects CRUD with ownership checks, search and filters
 - [x] ✅ 1.6 Paste-text sources (normalize + chunk)
-- [ ] 1.7 React app shell: dark design tokens, collapsible sidebar, top navigation
-- [ ] 1.8 Login / Register screens
-- [ ] 1.9 Dashboard (real stats, empty states)
-- [ ] 1.10 Create Lesson screen (paste input + preferences)
-- [ ] 1.11 My Library (search, filter, sort, favorite, duplicate, rename, delete)
-- [ ] 1.12 Acceptance: create account → paste material → save project → reopen it
+- [x] ✅ 1.7 React app shell: dark design tokens, collapsible sidebar, top navigation
+- [x] ✅ 1.8 Login / Register screens
+- [x] ✅ 1.9 Dashboard (real stats, empty states)
+- [x] ✅ 1.10 Create Lesson screen (paste input + preferences)
+- [x] ✅ 1.11 My Library (search, filter, sort, favorite, duplicate, rename, delete)
+- [x] ✅ 1.12 Acceptance: create account → paste material → save project → reopen it
 
 ## Phase 2 — AI learning content
 
