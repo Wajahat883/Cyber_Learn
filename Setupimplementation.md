@@ -22,9 +22,9 @@ Phase 0 (Docker) was added on top of the spec so the whole application runs loca
 - [x] ✅ 0.1 npm-workspaces monorepo (`packages/shared`, `backend`, `frontend`)
 - [x] ✅ 0.2 Shared Zod schemas (analysis, lesson, diagram, presentation manifest, quiz, flashcard)
 - [x] ✅ 0.3 `.env.example` with empty placeholders, `.gitignore` excluding `.env`
-- [ ] 0.4 Backend Dockerfile (API + worker) and frontend Dockerfile (nginx)
-- [ ] 0.5 `docker-compose.yml` running MongoDB, Redis, API, worker, frontend (+ optional MinIO)
-- [ ] 0.6 `docker-compose.dev.yml` for infrastructure-only local development
+- [x] ✅ 0.4 Backend Dockerfile (API + worker) and frontend Dockerfile (nginx)
+- [x] ✅ 0.5 `docker-compose.yml` running MongoDB, Redis, API, worker, frontend (+ optional MinIO) — build steps and nginx config verified locally; Docker is not installed on the dev machine yet, so run `docker compose up --build` once to confirm
+- [x] ✅ 0.6 `docker-compose.dev.yml` for infrastructure-only local development
 
 ## Phase 1 — Foundation
 

@@ -126,6 +126,35 @@ function splitLong(text: string): string[] {
   return out;
 }
 
+/** Splits text into heading-led blocks, keeping fenced code inside its block. */
+export function splitByHeadings(text: string): { heading: string; level: number; text: string }[] {
+  const lines = text.split('\n');
+  const blocks: { heading: string; level: number; text: string }[] = [];
+  let current = { heading: '', level: 0, lines: [] as string[] };
+  let inFence = false;
+  const flush = () => {
+    const body = current.lines.join('\n').trim();
+    if (body || current.heading) blocks.push({ heading: current.heading, level: current.level, text: body });
+  };
+  lines.forEach((line, i) => {
+    if (/^\s*```/.test(line)) inFence = !inFence;
+    if (!inFence) {
+      const prevBlank = i === 0 || !lines[i - 1].trim();
+      const h = detectHeading(line, lines[i + 1]);
+      if (h && (prevBlank || line.startsWith('#'))) {
+        flush();
+        const md = line.match(/^(#{1,6})\s/);
+        current = { heading: h, level: md ? md[1].length : 2, lines: [] };
+        return;
+      }
+      if (/^(=+|-+)$/.test(line.trim()) && current.lines.length === 0 && current.heading) return;
+    }
+    current.lines.push(line);
+  });
+  flush();
+  return blocks;
+}
+
 /** Splits text into sentences (used by the offline mock provider and narration timing). */
 export function sentences(text: string): string[] {
   return (text.replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) ?? [])
