@@ -1,4 +1,4 @@
-import { Schema, Types, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
+import { Schema, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
 import type { ConceptRelationship, DiagramSpec, KeyTerm, LessonSection } from '@cyberlearn/shared';
 
 /**
@@ -8,10 +8,10 @@ import type { ConceptRelationship, DiagramSpec, KeyTerm, LessonSection } from '@
  */
 const lessonSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    projectId: { type: Types.ObjectId, ref: 'Project', required: true },
-    sourceIds: [{ type: Types.ObjectId, ref: 'Source' }],
-    generationId: { type: Types.ObjectId, ref: 'Generation', default: null },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
+    sourceIds: [{ type: Schema.Types.ObjectId, ref: 'Source' }],
+    generationId: { type: Schema.Types.ObjectId, ref: 'Generation', default: null },
     title: { type: String, required: true, maxlength: 200 },
     subject: { type: String, default: '' },
     difficulty: { type: String, default: 'intermediate' },
@@ -55,8 +55,8 @@ export const Lesson = model('Lesson', lessonSchema);
 /** Previous versions are preserved whenever a lesson is edited or regenerated (Roman Urdu section 7). */
 const lessonVersionSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    lessonId: { type: Types.ObjectId, ref: 'Lesson', required: true },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', required: true },
     version: { type: Number, required: true },
     snapshot: { type: Schema.Types.Mixed, required: true },
     reason: { type: String, default: 'edit' },

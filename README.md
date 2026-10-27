@@ -216,3 +216,4 @@ When studying from Hack The Box Academy (like CDSA) or university labs, notes ar
 ### 7. Voice-Interactive "Viva / Interview" Practice Mode
 Since you already have TTS narration and quiz evaluation in the architecture:
 - **Idea:** Add a **"SOC / Cybersecurity Interview & Viva Mode"** in the Revision Center where the AI asks you a conceptual or scenario question aloud, you type (or speak) your explanation, and the AI grades your answer against the source material—pointing out what key technical points you hit and what you missed.
+# Cyber_Learn_With

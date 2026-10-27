@@ -1,11 +1,11 @@
-import { Schema, Types, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
+import { Schema, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
 import type { Question } from '@cyberlearn/shared';
 
 const flashcardSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    projectId: { type: Types.ObjectId, ref: 'Project', required: true },
-    lessonId: { type: Types.ObjectId, ref: 'Lesson', required: true },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
+    lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', required: true },
     conceptId: { type: String, default: '' },
     sectionId: { type: String, default: '' },
     front: { type: String, required: true, maxlength: 500 },
@@ -24,9 +24,9 @@ export const Flashcard = model('Flashcard', flashcardSchema);
 /** Per-user review state kept apart from card content (spec 8.8) — also the revision schedule. */
 const flashcardReviewSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    flashcardId: { type: Types.ObjectId, ref: 'Flashcard', required: true },
-    lessonId: { type: Types.ObjectId, ref: 'Lesson', required: true },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    flashcardId: { type: Schema.Types.ObjectId, ref: 'Flashcard', required: true },
+    lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', required: true },
     repetitions: { type: Number, default: 0 },
     intervalDays: { type: Number, default: 0 },
     easeFactor: { type: Number, default: 2.5 },
@@ -47,9 +47,9 @@ export const FlashcardReview = model('FlashcardReview', flashcardReviewSchema);
 
 const quizSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    projectId: { type: Types.ObjectId, ref: 'Project', required: true },
-    lessonId: { type: Types.ObjectId, ref: 'Lesson', required: true },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
+    lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', required: true },
     title: { type: String, required: true },
     questions: { type: [Schema.Types.Mixed], default: [] },
     difficulty: { type: String, default: 'intermediate' },
@@ -65,9 +65,9 @@ export const Quiz = model('Quiz', quizSchema);
 
 const quizAttemptSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    quizId: { type: Types.ObjectId, ref: 'Quiz', required: true },
-    lessonId: { type: Types.ObjectId, ref: 'Lesson', required: true },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    quizId: { type: Schema.Types.ObjectId, ref: 'Quiz', required: true },
+    lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', required: true },
     answers: [
       {
         _id: false,

@@ -1,11 +1,11 @@
-import { Schema, Types, model } from 'mongoose';
+import { Schema, model } from 'mongoose';
 
 /** One progress summary per user and lesson. Opening a lesson never counts as mastering it. */
 const progressSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    lessonId: { type: Types.ObjectId, ref: 'Lesson', required: true },
-    projectId: { type: Types.ObjectId, ref: 'Project', required: true },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', required: true },
+    projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
     lastSlideViewed: { type: Number, default: 0 },
     completedSections: { type: [String], default: [] },
     bookmarks: { type: [String], default: [] },
@@ -24,9 +24,9 @@ export const Progress = model('Progress', progressSchema);
 /** Append-only log of real study activity: drives streaks, study time and project activity. */
 const activitySchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    projectId: { type: Types.ObjectId, ref: 'Project', default: null },
-    lessonId: { type: Types.ObjectId, ref: 'Lesson', default: null },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    projectId: { type: Schema.Types.ObjectId, ref: 'Project', default: null },
+    lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', default: null },
     type: {
       type: String,
       enum: [

@@ -1,9 +1,9 @@
-import { Schema, Types, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
+import { Schema, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
 
 const projectSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    subjectId: { type: Types.ObjectId, ref: 'Subject', default: null },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    subjectId: { type: Schema.Types.ObjectId, ref: 'Subject', default: null },
     title: { type: String, required: true, trim: true, maxlength: 200 },
     description: { type: String, default: '', maxlength: 2000 },
     /** Subject detected by the content analyzer. */
@@ -28,7 +28,7 @@ const projectSchema = new Schema(
       flashcards: { type: Boolean, default: true },
     },
     favorite: { type: Boolean, default: false },
-    lessonId: { type: Types.ObjectId, ref: 'Lesson', default: null },
+    lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', default: null },
     lastStudiedAt: { type: Date, default: null },
   },
   { timestamps: true },

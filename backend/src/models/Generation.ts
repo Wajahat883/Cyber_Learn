@@ -1,4 +1,4 @@
-import { Schema, Types, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
+import { Schema, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
 import { GENERATION_STAGES, type StageResult } from '@cyberlearn/shared';
 
 const stageResultSchema = new Schema(
@@ -17,9 +17,9 @@ const stageResultSchema = new Schema(
 /** Tracks one asynchronous generation run. Only safe diagnostics are stored, never secrets. */
 const generationSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    projectId: { type: Types.ObjectId, ref: 'Project', required: true },
-    sourceIds: [{ type: Types.ObjectId, ref: 'Source' }],
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
+    sourceIds: [{ type: Schema.Types.ObjectId, ref: 'Source' }],
     preferences: { type: Schema.Types.Mixed, required: true },
     status: {
       type: String,
@@ -32,8 +32,8 @@ const generationSchema = new Schema(
     cancelRequested: { type: Boolean, default: false },
     /** The plan from the content analyzer, editable on the preview screen. */
     analysis: { type: Schema.Types.Mixed, default: null },
-    lessonId: { type: Types.ObjectId, ref: 'Lesson', default: null },
-    presentationId: { type: Types.ObjectId, ref: 'Presentation', default: null },
+    lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', default: null },
+    presentationId: { type: Schema.Types.ObjectId, ref: 'Presentation', default: null },
     attemptCount: { type: Number, default: 0 },
     errorCode: { type: String, default: '' },
     errorMessage: { type: String, default: '' },

@@ -1,12 +1,12 @@
-import { Schema, Types, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
+import { Schema, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
 import type { PresentationManifest } from '@cyberlearn/shared';
 
 /** Holds the current manifest; validated against PresentationManifestSchema before every save. */
 const presentationSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    projectId: { type: Types.ObjectId, ref: 'Project', required: true },
-    lessonId: { type: Types.ObjectId, ref: 'Lesson', required: true },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
+    lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', required: true },
     title: { type: String, required: true, maxlength: 200 },
     version: { type: Number, default: 1 },
     manifest: { type: Schema.Types.Mixed, required: true },
@@ -28,8 +28,8 @@ export const Presentation = model('Presentation', presentationSchema);
 /** Saved versions for presentation history (spec Phase 7). */
 const presentationVersionSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    presentationId: { type: Types.ObjectId, ref: 'Presentation', required: true },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    presentationId: { type: Schema.Types.ObjectId, ref: 'Presentation', required: true },
     version: { type: Number, required: true },
     label: { type: String, default: '' },
     manifest: { type: Schema.Types.Mixed, required: true },

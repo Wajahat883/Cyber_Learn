@@ -1,4 +1,4 @@
-import { Schema, Types, model } from 'mongoose';
+import { Schema, model } from 'mongoose';
 
 /**
  * Subjects are data, not code (Roman Urdu section 3): adding "Cloud Security"
@@ -6,7 +6,7 @@ import { Schema, Types, model } from 'mongoose';
  */
 const subjectSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     name: { type: String, required: true, trim: true, maxlength: 100 },
     description: { type: String, default: '', maxlength: 1000 },
     color: { type: String, default: '#38BDF8' },
@@ -21,15 +21,15 @@ export const Subject = model('Subject', subjectSchema);
 
 const learningPathSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    subjectId: { type: Types.ObjectId, ref: 'Subject', required: true },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    subjectId: { type: Schema.Types.ObjectId, ref: 'Subject', required: true },
     title: { type: String, required: true, maxlength: 150 },
     description: { type: String, default: '', maxlength: 1000 },
     modules: [
       {
         title: { type: String, required: true, maxlength: 150 },
         description: { type: String, default: '', maxlength: 600 },
-        projectIds: [{ type: Types.ObjectId, ref: 'Project' }],
+        projectIds: [{ type: Schema.Types.ObjectId, ref: 'Project' }],
       },
     ],
   },

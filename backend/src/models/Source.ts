@@ -1,10 +1,10 @@
-import { Schema, Types, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
+import { Schema, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
 
 /** Metadata about pasted text or an uploaded document. The original is preserved, never overwritten. */
 const sourceSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    projectId: { type: Types.ObjectId, ref: 'Project', required: true },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
     title: { type: String, required: true, maxlength: 200 },
     sourceType: { type: String, enum: ['text', 'upload'], required: true },
     originalFilename: { type: String, default: '' },
@@ -37,9 +37,9 @@ export const Source = model('Source', sourceSchema);
  */
 const sourceChunkSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    projectId: { type: Types.ObjectId, ref: 'Project', required: true },
-    sourceId: { type: Types.ObjectId, ref: 'Source', required: true },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
+    sourceId: { type: Schema.Types.ObjectId, ref: 'Source', required: true },
     index: { type: Number, required: true },
     text: { type: String, required: true },
     heading: { type: String, default: '' },

@@ -1,4 +1,4 @@
-import { Schema, Types, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
+import { Schema, model, type InferSchemaType, type HydratedDocument } from 'mongoose';
 
 export const ASSET_TYPES = ['image', 'audio', 'diagram-export', 'pdf', 'pptx', 'markdown', 'backup', 'source-file'] as const;
 export type AssetType = (typeof ASSET_TYPES)[number];
@@ -6,9 +6,9 @@ export type AssetType = (typeof ASSET_TYPES)[number];
 /** Binary files live in object storage; this collection keeps metadata and ownership. */
 const assetSchema = new Schema(
   {
-    ownerId: { type: Types.ObjectId, ref: 'User', required: true },
-    projectId: { type: Types.ObjectId, ref: 'Project', default: null },
-    lessonId: { type: Types.ObjectId, ref: 'Lesson', default: null },
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    projectId: { type: Schema.Types.ObjectId, ref: 'Project', default: null },
+    lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', default: null },
     assetType: { type: String, enum: ASSET_TYPES, required: true },
     filename: { type: String, default: '' },
     storageKey: { type: String, default: '' },

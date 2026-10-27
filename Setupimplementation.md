@@ -28,12 +28,12 @@ Phase 0 (Docker) was added on top of the spec so the whole application runs loca
 
 ## Phase 1 — Foundation
 
-- [ ] 1.1 Express API with `/api/v1`, helmet, CORS, rate limits, central error format
-- [ ] 1.2 MongoDB connection + Mongoose models (all collections from section 8)
-- [ ] 1.3 Authentication (register, login, logout, me, forgot/reset password), HTTP-only cookies + CSRF
-- [ ] 1.4 Dynamic Subjects & Learning Paths (Roman Urdu section 3)
-- [ ] 1.5 Projects CRUD with ownership checks, search and filters
-- [ ] 1.6 Paste-text sources (normalize + chunk)
+- [x] ✅ 1.1 Express API with `/api/v1`, helmet, CORS, rate limits, central error format
+- [x] ✅ 1.2 MongoDB connection + Mongoose models (all collections from section 8)
+- [x] ✅ 1.3 Authentication (register, login, logout, me, forgot/reset password), HTTP-only cookies + CSRF
+- [x] ✅ 1.4 Dynamic Subjects & Learning Paths (Roman Urdu section 3)
+- [x] ✅ 1.5 Projects CRUD with ownership checks, search and filters
+- [x] ✅ 1.6 Paste-text sources (normalize + chunk)
 - [ ] 1.7 React app shell: dark design tokens, collapsible sidebar, top navigation
 - [ ] 1.8 Login / Register screens
 - [ ] 1.9 Dashboard (real stats, empty states)
