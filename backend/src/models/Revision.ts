@@ -94,3 +94,17 @@ quizAttemptSchema.index({ ownerId: 1, submittedAt: -1 });
 quizAttemptSchema.index({ ownerId: 1, lessonId: 1 });
 
 export const QuizAttempt = model('QuizAttempt', quizAttemptSchema);
+
+/** Questions the learner bookmarked in the Revision Center. */
+const questionBookmarkSchema = new Schema(
+  {
+    ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    quizId: { type: Schema.Types.ObjectId, ref: 'Quiz', required: true },
+    questionId: { type: String, required: true },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } },
+);
+
+questionBookmarkSchema.index({ ownerId: 1, quizId: 1, questionId: 1 }, { unique: true });
+
+export const QuestionBookmark = model('QuestionBookmark', questionBookmarkSchema);

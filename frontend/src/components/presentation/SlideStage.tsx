@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { DiagramSpec, Slide } from '@cyberlearn/shared';
 import { assetUrl } from '../../lib/api';
-import { layoutDiagram } from '../../lib/diagramLayout';
+import { layoutDiagram } from '@cyberlearn/shared';
 import { DiagramSvg } from '../diagrams/DiagramSvg';
 import type { SlideFrame } from '../../features/presentations/frame';
 

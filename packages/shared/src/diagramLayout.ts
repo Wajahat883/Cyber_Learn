@@ -1,4 +1,4 @@
-import type { DiagramSpec, NodeKind } from '@cyberlearn/shared';
+import type { DiagramSpec, NodeKind } from './diagram.js';
 
 export const NODE_W = 190;
 export const NODE_H = 64;

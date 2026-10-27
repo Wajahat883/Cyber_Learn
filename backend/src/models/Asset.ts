@@ -25,6 +25,9 @@ const assetSchema = new Schema(
       durationMs: { type: Number, default: 0 },
       fallback: { type: Boolean, default: false },
     },
+    exportOptions: {
+      includeQuestions: { type: Boolean, default: true },
+    },
     status: { type: String, enum: ['pending', 'processing', 'ready', 'failed'], default: 'pending' },
     error: { type: String, default: '' },
   },

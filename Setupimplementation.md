@@ -66,28 +66,28 @@ Phase 0 (Docker) was added on top of the spec so the whole application runs loca
 
 ## Phase 4 — Animated presentation
 
-- [ ] 4.1 Presentation manifest assembler (7 presentation types)
-- [ ] 4.2 Slide layouts on a 16:9 stage
-- [ ] 4.3 Presentation clock / timeline engine (reveal, highlight, moveAlongPath)
-- [ ] 4.4 Controls: play/pause, prev/next, replay, seek, speed, fullscreen, jump, restart
-- [ ] 4.5 Acceptance: play, pause and resume without losing synchronization
+- [x] ✅ 4.1 Presentation manifest assembler (7 presentation types)
+- [x] ✅ 4.2 Slide layouts on a 16:9 stage
+- [x] ✅ 4.3 Presentation clock / timeline engine (reveal, highlight, moveAlongPath)
+- [x] ✅ 4.4 Controls: play/pause, prev/next, replay, seek, speed, fullscreen, jump, restart
+- [x] ✅ 4.5 Acceptance: play, pause and resume without losing synchronization
 
 ## Phase 5 — Narration
 
-- [ ] 5.1 Narration script generation from slide data
-- [ ] 5.2 TTS integration (provider audio or browser speech fallback)
-- [ ] 5.3 Captions + transcript panel
-- [ ] 5.4 Narration-to-animation synchronization
-- [ ] 5.5 Acceptance: speech and visuals follow the same lesson plan
+- [x] ✅ 5.1 Narration script generation from slide data
+- [x] ✅ 5.2 TTS integration (provider audio or browser speech fallback)
+- [x] ✅ 5.3 Captions + transcript panel
+- [x] ✅ 5.4 Narration-to-animation synchronization
+- [x] ✅ 5.5 Acceptance: speech and visuals follow the same lesson plan
 
 ## Phase 6 — Revision system
 
-- [ ] 6.1 Flashcards with spaced repetition (SM-2)
-- [ ] 6.2 Quizzes: MCQ, true/false, short answer, scenario / log analysis
-- [ ] 6.3 Answer explanations and mistake review
-- [ ] 6.4 Progress tracking + Learning Progress screen
-- [ ] 6.5 Revision Center (due items, weak topics)
-- [ ] 6.6 Acceptance: user can test understanding and revisit weak topics
+- [x] ✅ 6.1 Flashcards with spaced repetition (SM-2)
+- [x] ✅ 6.2 Quizzes: MCQ, true/false, short answer, scenario / log analysis
+- [x] ✅ 6.3 Answer explanations and mistake review
+- [x] ✅ 6.4 Progress tracking + Learning Progress screen
+- [x] ✅ 6.5 Revision Center (due items, weak topics)
+- [x] ✅ 6.6 Acceptance: user can test understanding and revisit weak topics
 
 ## Phase 7 — Export and polish
 

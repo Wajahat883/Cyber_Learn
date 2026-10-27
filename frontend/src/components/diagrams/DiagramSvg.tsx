@@ -1,5 +1,5 @@
 import type { DiagramSpec } from '@cyberlearn/shared';
-import { KIND_COLORS, NODE_H, NODE_W, pointAlong, polylinePath, type DiagramLayout } from '../../lib/diagramLayout';
+import { KIND_COLORS, NODE_H, NODE_W, pointAlong, polylinePath, type DiagramLayout } from '@cyberlearn/shared';
 
 export interface DiagramFrame {
   /** Elements shown so far; undefined = everything visible. */

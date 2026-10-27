@@ -2,7 +2,7 @@ import { memo, useMemo } from 'react';
 import { Background, Controls, Handle, MarkerType, MiniMap, Position, ReactFlow, type Edge, type Node, type NodeProps } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { DiagramSpec, NodeKind } from '@cyberlearn/shared';
-import { KIND_COLORS, layoutDiagram, NODE_H, NODE_W } from '../../lib/diagramLayout';
+import { KIND_COLORS, layoutDiagram, NODE_H, NODE_W } from '@cyberlearn/shared';
 
 type DiagramNodeData = { label: string; kind: NodeKind; selected: boolean; dimmed: boolean; highlighted: boolean; direction: 'LR' | 'TB' };
 

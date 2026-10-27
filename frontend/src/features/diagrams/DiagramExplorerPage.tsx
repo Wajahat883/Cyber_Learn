@@ -5,7 +5,7 @@ import { ArrowRight, Download, FileImage, Network, Pause, Pencil, Play, RotateCc
 import type { DiagramSpec } from '@cyberlearn/shared';
 import { api, errorMessage } from '../../lib/api';
 import { downloadDiagramPng, downloadDiagramSvg } from '../../lib/download';
-import { KIND_COLORS } from '../../lib/diagramLayout';
+import { KIND_COLORS } from '@cyberlearn/shared';
 import { DiagramView } from '../../components/diagrams/DiagramView';
 import { Card, PageHeader } from '../../components/ui/Card';
 import { Button, ButtonLink } from '../../components/ui/Button';

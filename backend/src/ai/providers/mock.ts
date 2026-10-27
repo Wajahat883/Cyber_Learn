@@ -446,7 +446,7 @@ function mockDiagram(ctx: DiagramContext): GeneratedDiagram {
       ? nodes.slice(1).map((n, i) => ({ id: `e${i + 1}`, source: nodes[i].id, target: n.id, label: edgeLabel(nodes[i].label, n.label) }))
       : nodes.slice(1).map((n, i) => ({ id: `e${i + 1}`, source: nodes[0].id, target: n.id, label: edgeLabel(nodes[0].label, n.label) }));
   return {
-    title: clip(`${ctx.section.title}`, 200),
+    title: clip(flow ? `${ctx.section.title}: flow` : `${ctx.section.title} at a glance`, 200),
     description: clip(ctx.visual.purpose, 1000),
     direction: flow && ctx.visual.type !== 'decision-flow' ? 'LR' : 'TB',
     nodes,

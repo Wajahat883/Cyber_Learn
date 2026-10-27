@@ -5,12 +5,16 @@ import { validate, validateIds } from '../../middleware/validate.js';
 import { Lesson, Progress, Project } from '../../models/index.js';
 import { recordActivity } from '../../services/activity.js';
 import { param, userId } from '../../utils/http.js';
-import { dashboard } from './stats.service.js';
+import { dashboard, progressSummary } from './stats.service.js';
 
 export const progressRouter = Router();
 
 progressRouter.get('/dashboard', async (req, res) => {
   res.json(await dashboard(userId(req)));
+});
+
+progressRouter.get('/progress/summary', async (req, res) => {
+  res.json(await progressSummary(userId(req)));
 });
 
 progressRouter.get('/lessons/:id/progress', validateIds('id'), async (req, res) => {

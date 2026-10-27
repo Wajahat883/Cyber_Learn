@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { DiagramSpec } from '@cyberlearn/shared';
 import { DiagramSvg } from '../components/diagrams/DiagramSvg';
-import { layoutDiagram } from './diagramLayout';
+import { layoutDiagram } from '@cyberlearn/shared';
 
 function save(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);

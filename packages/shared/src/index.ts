@@ -7,3 +7,4 @@ export * from './assessment.js';
 export * from './generation.js';
 export * from './spacedRepetition.js';
 export * from './api.js';
+export * from './diagramLayout.js';

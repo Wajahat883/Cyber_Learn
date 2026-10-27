@@ -18,6 +18,7 @@ import { lessonsRouter } from './modules/lessons/lessons.routes.js';
 import { presentationsRouter } from './modules/presentations/presentations.routes.js';
 import { progressRouter } from './modules/progress/progress.routes.js';
 import { projectsRouter } from './modules/projects/projects.routes.js';
+import { revisionRouter } from './modules/revision/revision.routes.js';
 import { sourcesRouter } from './modules/sources/sources.routes.js';
 import { subjectsRouter } from './modules/subjects/subjects.routes.js';
 import { logger } from './utils/logger.js';
@@ -67,6 +68,7 @@ export function createApp() {
   secured.use(presentationsRouter);
   secured.use(assetsRouter);
   secured.use(askRouter);
+  secured.use(revisionRouter);
   api.use(secured);
 
   app.use('/api/v1', api);

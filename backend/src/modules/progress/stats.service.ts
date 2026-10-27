@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { Activity, Flashcard, FlashcardReview, Generation, Lesson, Presentation, Progress, Project, QuizAttempt } from '../../models/index.js';
+import { Activity, Flashcard, FlashcardReview, Generation, Lesson, Presentation, Progress, Project, Quiz, QuizAttempt } from '../../models/index.js';
 
 const oid = (id: string) => new Types.ObjectId(id);
 
@@ -128,6 +128,84 @@ export async function dashboard(ownerId: string) {
     recentProjects,
     runningGenerations,
     revision: due,
+    weakTopics: weak,
+  };
+}
+
+/** Learning statistics for the progress screen (spec 4.13). Every number comes from recorded activity. */
+export async function progressSummary(ownerId: string) {
+  const owner = oid(ownerId);
+  const since = new Date(Date.now() - 30 * 86400000);
+  const [lessons, progress, attempts, reviews, daily, streak, weak] = await Promise.all([
+    Lesson.find({ ownerId }).select('title sections.id projectId createdAt').lean(),
+    Progress.find({ ownerId }).lean(),
+    QuizAttempt.find({ ownerId }).sort({ submittedAt: 1 }).select('quizId lessonId score maxScore submittedAt answers.questionId answers.correct').lean(),
+    FlashcardReview.find({ ownerId }).select('reviewCount correctCount lapses').lean(),
+    Activity.aggregate<{ _id: string; seconds: number }>([
+      { $match: { ownerId: owner, type: 'study_time', createdAt: { $gte: since } } },
+      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, seconds: { $sum: '$seconds' } } },
+      { $sort: { _id: 1 } },
+    ]),
+    studyStreak(ownerId),
+    weakTopics(ownerId, 10),
+  ]);
+
+  const progressByLesson = new Map(progress.map((p) => [String(p.lessonId), p]));
+  const attemptsByLesson = new Map<string, number>();
+  for (const a of attempts) {
+    const pct = a.maxScore ? a.score / a.maxScore : 0;
+    attemptsByLesson.set(String(a.lessonId), Math.max(attemptsByLesson.get(String(a.lessonId)) ?? 0, pct));
+  }
+  const perLesson = lessons.map((l) => {
+    const p = progressByLesson.get(String(l._id));
+    const total = (l.sections as unknown[]).length || 1;
+    return {
+      lessonId: String(l._id),
+      title: l.title,
+      completion: Math.round(((p?.completedSections.length ?? 0) / total) * 100),
+      completionStatus: p?.completionStatus ?? 'not_started',
+      timeSpentSeconds: p?.timeSpentSeconds ?? 0,
+      lastStudiedAt: p?.lastStudiedAt ?? null,
+      bestQuizScore: attemptsByLesson.has(String(l._id)) ? Math.round(attemptsByLesson.get(String(l._id))! * 100) : null,
+    };
+  });
+
+  // Questions answered wrongly in two or more attempts.
+  const wrongCounts = new Map<string, { quizId: string; questionId: string; count: number }>();
+  for (const a of attempts) {
+    for (const ans of a.answers ?? []) {
+      if (ans.correct) continue;
+      const key = `${a.quizId}:${ans.questionId}`;
+      const entry = wrongCounts.get(key) ?? { quizId: String(a.quizId), questionId: ans.questionId ?? '', count: 0 };
+      entry.count += 1;
+      wrongCounts.set(key, entry);
+    }
+  }
+  const repeated = [...wrongCounts.values()].filter((w) => w.count >= 2).sort((a, b) => b.count - a.count).slice(0, 10);
+  const quizzes = await Quiz.find({ ownerId, _id: { $in: repeated.map((r) => r.quizId) } }).select('questions.id questions.prompt lessonId').lean();
+  const prompt = (quizId: string, qid: string) => (quizzes.find((q) => String(q._id) === quizId)?.questions as { id: string; prompt: string }[] | undefined)?.find((q) => q.id === qid)?.prompt ?? '';
+
+  const reviewsTotal = reviews.reduce((s, r) => s + r.reviewCount, 0);
+  const correctTotal = reviews.reduce((s, r) => s + (r.correctCount ?? 0), 0);
+  const scored = attempts.filter((a) => a.maxScore > 0);
+
+  return {
+    totals: {
+      lessonsCreated: lessons.length,
+      lessonsViewed: progress.filter((p) => p.lastStudiedAt).length,
+      lessonsCompleted: progress.filter((p) => p.completionStatus === 'completed').length,
+      averageCompletion: perLesson.length ? Math.round(perLesson.reduce((s, l) => s + l.completion, 0) / perLesson.length) : 0,
+      timeSpentSeconds: progress.reduce((s, p) => s + p.timeSpentSeconds, 0),
+      quizAttempts: scored.length,
+      averageQuizScore: scored.length ? Math.round((scored.reduce((s, a) => s + a.score / a.maxScore, 0) / scored.length) * 100) : null,
+      flashcardReviews: reviewsTotal,
+      flashcardAccuracy: reviewsTotal ? Math.round((correctTotal / reviewsTotal) * 100) : null,
+      streak,
+    },
+    dailyStudy: daily.map((d) => ({ date: d._id, minutes: Math.round(d.seconds / 60) })),
+    quizHistory: scored.slice(-30).map((a) => ({ date: a.submittedAt, score: Math.round((a.score / a.maxScore) * 100), lessonId: String(a.lessonId) })),
+    perLesson,
+    repeatedMistakes: repeated.map((r) => ({ ...r, prompt: prompt(r.quizId, r.questionId) })),
     weakTopics: weak,
   };
 }
