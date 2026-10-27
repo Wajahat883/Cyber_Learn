@@ -1,6 +1,6 @@
 # Cyber_Learn
 
-# CyberLearn AI — Complete Step-by-Step Implementation Plan & Feature Ideas
+# CyberLearn  — Complete Step-by-Step Implementation Plan & Feature Ideas
 
 This document analyzes your `CyberLearn AI.md` specification (covering both the English technical architecture and the Roman Urdu universal learning workspace expansion) and turns it into an ordered, actionable step-by-step build guide, followed by high-value ideas and improvements for the platform.
 
