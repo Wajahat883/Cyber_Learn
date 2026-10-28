@@ -143,7 +143,12 @@ function safeError(err: unknown): string {
  * so repeating the stage would just multiply cost (IMPROVEMENTS 2.3).
  */
 export const isRetryable = (err: unknown) => err instanceof AiProviderError && err.retryable;
-const backoffMs = (attempt: number) => (env.isTest ? 0 : Math.min(30_000, 2000 * 2 ** (attempt - 1)));
+const backoffMs = (attempt: number, err?: unknown) => {
+  if (env.isTest) return 0;
+  // Rate limits need longer to clear than network blips.
+  const rateLimited = err instanceof AiProviderError && err.code === 'AI_HTTP_429';
+  return rateLimited ? 15_000 * attempt : Math.min(30_000, 2000 * 2 ** (attempt - 1));
+};
 
 // ---------------------------------------------------------------- stage helpers
 
@@ -260,7 +265,7 @@ const STAGES: Record<GenerationStage, (state: RunState) => Promise<string | void
       return saving;
     };
 
-    // Up to SECTION_CONCURRENCY sections are written at once; the saved order follows the plan.
+    // Up to SECTION_CONCURRENCY sections are written at once (one for free models); the saved order follows the plan.
     const todo = planned.map((section, i) => ({ section, i })).filter(({ i }) => !results[i]);
     let next = 0;
     let failure: unknown;
@@ -279,7 +284,9 @@ const STAGES: Record<GenerationStage, (state: RunState) => Promise<string | void
         }
       }
     };
-    await Promise.all(Array.from({ length: Math.min(SECTION_CONCURRENCY, todo.length) }, worker));
+    // Free models have tight per-minute limits shared by everyone: write their sections one at a time.
+    const concurrency = state.text.model?.endsWith(':free') ? 1 : SECTION_CONCURRENCY;
+    await Promise.all(Array.from({ length: Math.min(concurrency, todo.length) }, worker));
     await saving.catch(() => undefined);
     if (failure !== undefined) throw failure;
     const sections = ordered();
@@ -614,7 +621,7 @@ async function runClaimed(gen: GenerationDoc): Promise<void> {
           }
           if (isRetryable(err) && attempt < 3) {
             logger.warn({ err, stage, attempt }, 'Stage failed, retrying');
-            await new Promise((r) => setTimeout(r, backoffMs(attempt)));
+            await new Promise((r) => setTimeout(r, backoffMs(attempt, err)));
             continue;
           }
           logger.error({ err, stage, generationId }, 'Generation stage failed');

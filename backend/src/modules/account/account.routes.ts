@@ -3,7 +3,7 @@ import { Router, type Response } from 'express';
 import { usageToday } from '../../services/aiBudget.js';
 import { Types } from 'mongoose';
 import { z } from 'zod';
-import { AI_PROVIDER_PRESETS, AiSettingsInputSchema, presetById, UpdateProfileSchema, type AiSettingsInput } from '@cyberlearn/shared';
+import { AI_PROVIDER_PRESETS, AiSettingsInputSchema, isLikelyChatModel, MAX_FALLBACK_MODELS, presetById, UpdateProfileSchema, type AiSettingsInput } from '@cyberlearn/shared';
 import { buildProvider, listModels, resolveBaseUrl, type ProviderConfig } from '../../ai/providers/userProviders.js';
 import { AiOutputError, AiProviderError } from '../../ai/types.js';
 import { aiLimiter } from '../../middleware/rateLimit.js';
@@ -251,6 +251,11 @@ accountRouter.put('/account/ai', validate(AiSettingsInputSchema), async (req, re
   const input = req.body as AiSettingsInput;
   const cfg = await configFrom(ownerId, input);
   buildProvider(cfg); // validates provider, key and model before saving
+  // OpenRouter without a fallback list: switch to free models automatically when the main model hits a limit.
+  if (cfg.provider === 'openrouter' && !cfg.fallbackModels?.length) {
+    const available = await listModels(cfg).catch(() => [] as string[]);
+    cfg.fallbackModels = available.filter((m) => m.endsWith(':free') && m !== cfg.model && isLikelyChatModel(m)).slice(0, MAX_FALLBACK_MODELS);
+  }
   await User.updateOne(
     { _id: ownerId },
     {
@@ -265,7 +270,7 @@ accountRouter.put('/account/ai', validate(AiSettingsInputSchema), async (req, re
       },
     },
   );
-  res.json({ saved: true, keyHint: hint(cfg.apiKey) });
+  res.json({ saved: true, keyHint: hint(cfg.apiKey), fallbackModels: cfg.fallbackModels ?? [] });
 });
 
 /** Back to the server default from .env. The stored key is deleted. */

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Cpu, ExternalLink, KeyRound, RefreshCw, Server, Sparkles, Zap } from 'lucide-react';
-import { MAX_FALLBACK_MODELS, type AiProviderId, type AiProviderPreset } from '@cyberlearn/shared';
+import { isLikelyChatModel, MAX_FALLBACK_MODELS, type AiProviderId, type AiProviderPreset } from '@cyberlearn/shared';
 import { api, errorMessage } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { Card, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Input, Textarea } from '../../components/ui/Field';
+import { Input, Select, Textarea, Toggle } from '../../components/ui/Field';
 import { Alert, Badge } from '../../components/ui/Feedback';
 
 interface AiSettingsResponse {
@@ -56,7 +56,14 @@ export function parseFallbackModels(text: string, mainModel: string): string[] {
 
 /** Free OpenRouter-style models (":free" suffix) to fall back on, excluding ones already chosen. */
 export function pickFreeModels(available: string[], chosen: string[], mainModel: string, count = 3): string[] {
-  return available.filter((m) => m.endsWith(':free') && m !== mainModel && !chosen.includes(m)).slice(0, count);
+  return available.filter((m) => m.endsWith(':free') && isLikelyChatModel(m) && m !== mainModel && !chosen.includes(m)).slice(0, count);
+}
+
+/** Model ids to show in the picker: free ones only when asked, free ones first otherwise; non-chat models (safety, embeddings…) last. */
+export function visibleModels(models: string[], freeOnly: boolean): string[] {
+  const free = models.filter((m) => m.endsWith(':free'));
+  const list = freeOnly ? free : [...free, ...models.filter((m) => !m.endsWith(':free'))];
+  return [...list.filter(isLikelyChatModel), ...list.filter((m) => !isLikelyChatModel(m))];
 }
 
 /**
@@ -72,6 +79,7 @@ export function AiProviderCard() {
   const [baseUrl, setBaseUrl] = useState('');
   const [fallbackText, setFallbackText] = useState('');
   const [models, setModels] = useState<string[]>([]);
+  const [freeOnly, setFreeOnly] = useState(true);
   const [tested, setTested] = useState<{ latencyMs: number; model: string } | null>(null);
 
   useEffect(() => {
@@ -89,6 +97,8 @@ export function AiProviderCard() {
   const supportsFallback = preset?.protocol === 'openai-compatible';
   const fallbackModels = supportsFallback ? parseFallbackModels(fallbackText, model) : [];
   const freeSuggestions = pickFreeModels(models, fallbackModels, model);
+  const freeCount = models.filter((m) => m.endsWith(':free')).length;
+  const shownModels = visibleModels(models, freeOnly && freeCount > 0);
   const body = () => ({ provider, model, baseUrl, fallbackModels, ...(apiKey ? { apiKey } : {}) });
   const reset = () => {
     setModels([]);
@@ -99,14 +109,19 @@ export function AiProviderCard() {
     mutationFn: () => api.post<{ models: string[] }>('/account/ai/models', body()),
     onSuccess: (r) => {
       setModels(r.models);
-      if (!model && r.models[0]) setModel(preset?.suggestedModels.find((m) => r.models.includes(m)) ?? r.models[0]);
+      const hasFree = r.models.some((m) => m.endsWith(':free'));
+      setFreeOnly(hasFree);
+      // Only fill an empty model box; prefer a suggested model, then a free one.
+      if (!model && r.models[0]) setModel(preset?.suggestedModels.find((m) => r.models.includes(m)) ?? visibleModels(r.models, hasFree)[0] ?? r.models[0]);
     },
   });
   const test = useMutation({ mutationFn: () => api.post<{ ok: boolean; latencyMs: number; model: string }>('/account/ai/test', body()), onSuccess: (r) => setTested(r) });
   const save = useMutation({
-    mutationFn: () => api.put('/account/ai', body()),
-    onSuccess: () => {
+    mutationFn: () => api.put<{ fallbackModels?: string[] }>('/account/ai', body()),
+    onSuccess: (r) => {
       setApiKey('');
+      // The server fills in free fallback models when the list was left empty.
+      if (r.fallbackModels?.length) setFallbackText(r.fallbackModels.join('\n'));
       qc.invalidateQueries({ queryKey: ['ai-settings'] });
       qc.invalidateQueries({ queryKey: ['account-overview'] });
     },
@@ -208,7 +223,26 @@ export function AiProviderCard() {
                 <option key={m} value={m} />
               ))}
             </datalist>
-            {models.length > 0 && <p className="text-xs text-muted mt-1.5">{models.length} models available — start typing to filter.</p>}
+            {models.length > 0 && (
+              <div className="mt-3 rounded-xl border border-border bg-surface-2/40 px-3 pb-3">
+                {freeCount > 0 && <Toggle checked={freeOnly} onChange={setFreeOnly} label={`Free models only (${freeCount} free)`} description={`${models.length} models available in total`} />}
+                <Select
+                  label={freeCount > 0 ? undefined : `${models.length} models available`}
+                  aria-label="Choose a model"
+                  value={shownModels.includes(model) ? model : ''}
+                  onChange={(e) => (setModel(e.target.value), setTested(null))}
+                >
+                  <option value="" disabled>
+                    Choose from {shownModels.length} model{shownModels.length === 1 ? '' : 's'}…
+                  </option>
+                  {shownModels.map((m) => (
+                    <option key={m} value={m}>
+                      {isLikelyChatModel(m) ? m : `${m} — not a chat model, can't write lessons`}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
           </div>
           {supportsFallback && (
             <div>
@@ -243,7 +277,12 @@ export function AiProviderCard() {
               Connected to {tested.model} in {(tested.latencyMs / 1000).toFixed(1)} s. Save to use it for new lessons.
             </Alert>
           )}
-          {save.isSuccess && !save.isPending && <Alert tone="success">Saved. New lessons, “Ask AI” and section tools now use this provider.</Alert>}
+          {save.isSuccess && !save.isPending && (
+            <Alert tone="success">
+              Saved. New lessons, “Ask AI” and section tools now use this provider.
+              {fallbackModels.length > 0 && <> If {model} hits a limit, the app switches automatically to: {fallbackModels.join(', ')}.</>}
+            </Alert>
+          )}
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" icon={<Zap className="h-4 w-4" />} loading={test.isPending} disabled={needsKey || (!model && preset.id !== 'anthropic')} onClick={() => test.mutate()}>
               Test connection

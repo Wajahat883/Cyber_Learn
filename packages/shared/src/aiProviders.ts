@@ -104,6 +104,13 @@ export const AI_PROVIDER_PRESETS: AiProviderPreset[] = [
 
 export const MAX_FALLBACK_MODELS = 5;
 
+/**
+ * Model ids that are clearly not general chat models (safety classifiers,
+ * moderation, embeddings, speech). They cannot write lessons, so they are never
+ * picked automatically or suggested as fallbacks.
+ */
+export const isLikelyChatModel = (id: string) => !/(safety|guard|moderation|embed|rerank|whisper|tts|speech|transcri)/i.test(id);
+
 export const presetById = (id: string) => AI_PROVIDER_PRESETS.find((p) => p.id === id);
 
 export const AiSettingsInputSchema = z.object({

@@ -279,6 +279,72 @@ describe('OpenAI-compatible structured output', () => {
     }
   });
 
+  it('waits and cycles through the models again when every model is rate-limited', async () => {
+    const models: string[] = [];
+    let busy = 3; // the first three requests are rate-limited
+    const server = http.createServer((req, res) => {
+      let raw = '';
+      req.on('data', (c) => (raw += c));
+      req.on('end', () => {
+        models.push(JSON.parse(raw).model);
+        if (busy-- > 0) {
+          res.writeHead(429, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'Provider returned error', code: 429, metadata: { provider_name: 'Google AI Studio', raw: 'gemma is temporarily rate-limited upstream' } } }));
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ choices: [{ message: { content: '{"a":"ok"}' }, finish_reason: 'stop' }] }));
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, () => r()));
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`;
+    try {
+      const request = { task: 'analyze' as const, instructions: 'x', content: 'y', schema: z.object({ a: z.string() }) };
+      const provider = new OpenAICompatibleTextProvider(url, 'k', 'g/one:free', ['g/two:free']);
+      const result = await provider.generateStructured(request);
+      expect(result.data).toEqual({ a: 'ok' });
+      expect(models).toEqual(['g/one:free', 'g/two:free', 'g/one:free', 'g/two:free']);
+
+      // With every request refused, the error names the upstream provider instead of "Provider returned error".
+      busy = 100;
+      const single = new OpenAICompatibleTextProvider(url, 'k', 'g/one:free');
+      await expect(single.generateStructured(request)).rejects.toThrow(/rate-limited \(429\): Google AI Studio refused the request \(gemma is temporarily rate-limited upstream\)/);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('moves to the next model when one cannot produce the required JSON, and bills both', async () => {
+    const models: string[] = [];
+    const server = http.createServer((req, res) => {
+      let raw = '';
+      req.on('data', (c) => (raw += c));
+      req.on('end', () => {
+        const body = JSON.parse(raw);
+        models.push(body.model);
+        const content = body.model === 'n/content-safety:free' ? 'User Safety: safe' : '{"a":"ok"}';
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ model: body.model, choices: [{ message: { content }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 3 } }));
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, () => r()));
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`;
+    try {
+      const provider = new OpenAICompatibleTextProvider(url, 'k', 'n/content-safety:free', ['g/gemma:free']);
+      const result = await provider.generateStructured({ task: 'analyze' as const, instructions: 'x', content: 'y', schema: z.object({ a: z.string() }) });
+      expect(result.data).toEqual({ a: 'ok' });
+      expect(models).toEqual(['n/content-safety:free', 'n/content-safety:free', 'g/gemma:free']); // first try + repair, then the fallback
+      expect(result.usage.calls).toBe(3);
+      expect(result.usage.inputTokens).toBe(30);
+      expect(provider.model).toBe('g/gemma:free');
+
+      const only = new OpenAICompatibleTextProvider(url, 'k', 'n/content-safety:free');
+      await expect(only.generateStructured({ task: 'analyze' as const, instructions: 'x', content: 'y', schema: z.object({ a: z.string() }) })).rejects.toBeInstanceOf(AiOutputError);
+    } finally {
+      server.close();
+    }
+  });
+
   it('retries within an OpenRouter credit limit and shows the provider message, not raw JSON', async () => {
     const limits: number[] = [];
     const server = http.createServer((req, res) => {

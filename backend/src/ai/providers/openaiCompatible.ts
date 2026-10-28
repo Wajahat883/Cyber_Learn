@@ -2,7 +2,7 @@ import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import { providerFetch } from '../../utils/safeFetch.js';
 import { runStructured } from '../structured.js';
-import { AiProviderError, type ImageGenerationProvider, type SpeechProvider, type StructuredRequest, type TextGenerationProvider, type TokenUsage } from '../types.js';
+import { addTokens, AiOutputError, AiProviderError, type AiUsage, type ImageGenerationProvider, type SpeechProvider, type StructuredRequest, type TextGenerationProvider, type TokenUsage } from '../types.js';
 
 /**
  * Adapter for any OpenAI-compatible HTTP API: OpenCode Zen, OpenAI, OpenRouter,
@@ -28,17 +28,31 @@ async function post(baseUrl: string, apiKey: string, path: string, body: unknown
     // OpenRouter answers 402 while other requests hold the account's credit; that clears once they finish.
     const inFlight = res.status === 402 && /in[- ]flight/i.test(raw);
     const retryable = res.status === 429 || res.status >= 500 || inFlight;
-    const prefix = res.status === 402 ? 'AI provider account is out of credits (402)' : `AI provider returned ${res.status}`;
-    throw new AiProviderError(`${prefix}${detail ? `: ${detail}` : ''}`, retryable, `AI_HTTP_${res.status}`);
+    const prefix = res.status === 402 ? 'AI provider account is out of credits (402)' : res.status === 429 ? 'AI model is rate-limited (429)' : `AI provider returned ${res.status}`;
+    const error: RateLimitedError = new AiProviderError(`${prefix}${detail ? `: ${detail}` : ''}`, retryable, `AI_HTTP_${res.status}`);
+    const retryAfter = Number(res.headers.get('retry-after'));
+    if (Number.isFinite(retryAfter) && retryAfter > 0) error.retryAfterMs = Math.min(retryAfter * 1000, 120_000);
+    throw error;
   }
   return res;
 }
 
-/** The provider's own error text (`{"error":{"message":…}}`) rather than a raw JSON dump. */
+type RateLimitedError = AiProviderError & { retryAfterMs?: number };
+
+/**
+ * The provider's own error text (`{"error":{"message":…}}`) rather than a raw JSON dump.
+ * OpenRouter's generic "Provider returned error" is expanded with the upstream provider and its message.
+ */
 function providerMessage(raw: string): string {
   try {
-    const parsed = JSON.parse(raw) as { error?: { message?: unknown } | string; message?: unknown };
+    const parsed = JSON.parse(raw) as { error?: { message?: unknown; metadata?: { provider_name?: unknown; raw?: unknown } } | string; message?: unknown };
     const msg = typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message ?? parsed.message);
+    const meta = typeof parsed.error === 'object' ? parsed.error?.metadata : undefined;
+    if (typeof msg === 'string' && /^provider returned error$/i.test(msg.trim()) && meta) {
+      const upstream = typeof meta.raw === 'string' ? providerMessage(meta.raw).slice(0, 160) : '';
+      const name = typeof meta.provider_name === 'string' ? meta.provider_name : 'the upstream provider';
+      return `${name} refused the request${upstream ? ` (${upstream})` : ''}. Free models are shared and often busy; try again in a minute or add another fallback model.`;
+    }
     if (typeof msg === 'string' && msg.trim()) return msg.trim();
   } catch {
     // Not JSON: fall through to the raw body.
@@ -69,8 +83,21 @@ export function shouldSwitchModel(err: unknown): boolean {
   return status === 400 && /model|endpoint/i.test(err.message) && !/max_tokens|max_completion_tokens/i.test(err.message);
 }
 
+function mergeUsage(a: AiUsage, b: AiUsage): AiUsage {
+  const total: AiUsage = { calls: a.calls + b.calls, inputChars: a.inputChars + b.inputChars, outputChars: a.outputChars + b.outputChars };
+  for (const u of [a, b]) {
+    if (u.inputTokens !== undefined || u.outputTokens !== undefined) {
+      addTokens(total, { inputTokens: u.inputTokens ?? 0, outputTokens: u.outputTokens ?? 0, cacheReadTokens: u.cacheReadTokens, cacheWriteTokens: u.cacheWriteTokens, model: u.model });
+    }
+  }
+  return total;
+}
+
 /** After this long on a fallback, try the main model again (daily and per-minute limits reset). */
 const RETRY_PRIMARY_MS = 60 * 60_000;
+/** When every model is rate-limited: wait 20 s, then 40 s, cycling through the models again each time. */
+const RATE_LIMIT_WAIT_MS = env.isTest ? 10 : 20_000;
+const MAX_RATE_LIMIT_ROUNDS = 2;
 
 export class OpenAICompatibleTextProvider implements TextGenerationProvider {
   readonly name = 'openai-compatible';
@@ -96,18 +123,57 @@ export class OpenAICompatibleTextProvider implements TextGenerationProvider {
     return this.models[this.active];
   }
 
-  generateStructured<T>(request: StructuredRequest<T>) {
+  /**
+   * A model that cannot produce the required JSON (e.g. a safety classifier or a
+   * very small model) is skipped like one that hit a limit: the next fallback
+   * model gets the whole request, including its own repair attempt.
+   */
+  async generateStructured<T>(request: StructuredRequest<T>) {
+    let spent: AiUsage | undefined;
+    for (;;) {
+      try {
+        const result = await this.runOnModels(request);
+        return { ...result, usage: spent ? mergeUsage(spent, result.usage) : result.usage };
+      } catch (err) {
+        if (err instanceof AiOutputError && err.usage) spent = spent ? mergeUsage(spent, err.usage) : err.usage;
+        if (!(err instanceof AiOutputError) || this.active >= this.models.length - 1) {
+          if (err instanceof AiOutputError && spent) err.usage = spent;
+          throw err;
+        }
+        const from = this.model;
+        this.active += 1;
+        this.switchedAt = Date.now();
+        logger.warn({ from, to: this.model, issues: err.issues.slice(0, 200) }, 'AI model output unusable, switching to fallback model');
+      }
+    }
+  }
+
+  private runOnModels<T>(request: StructuredRequest<T>) {
     return runStructured(async (system, user, maxTokens, call) => {
       if (this.active > 0 && Date.now() - this.switchedAt > RETRY_PRIMARY_MS) this.active = 0;
+      let rounds = 0;
       for (;;) {
         const model = this.model;
         try {
           return await this.callModel(model, system, user, maxTokens, call.task, call.jsonSchema);
         } catch (err) {
-          if (this.active >= this.models.length - 1 || !shouldSwitchModel(err)) throw err;
-          this.active += 1;
-          this.switchedAt = Date.now();
-          logger.warn({ from: model, to: this.model, reason: (err as Error).message.slice(0, 200) }, 'AI model unavailable, switching to fallback model');
+          if (!shouldSwitchModel(err)) throw err;
+          // A concurrent request already moved past this model: just retry on the current one.
+          if (this.model !== model) continue;
+          if (this.active < this.models.length - 1) {
+            this.active += 1;
+            this.switchedAt = Date.now();
+            logger.warn({ from: model, to: this.model, reason: (err as Error).message.slice(0, 200) }, 'AI model unavailable, switching to fallback model');
+            continue;
+          }
+          // Every model is rate-limited: wait for the limits to ease, then start again from the main model.
+          const rateLimited = err instanceof AiProviderError && (err.code === 'AI_HTTP_429' || (err.code === 'AI_HTTP_402' && err.retryable));
+          if (!rateLimited || rounds >= MAX_RATE_LIMIT_ROUNDS) throw err;
+          rounds += 1;
+          const waitMs = (err as RateLimitedError).retryAfterMs ?? RATE_LIMIT_WAIT_MS * rounds;
+          logger.warn({ models: this.models, waitMs, round: rounds }, 'All AI models are rate-limited, waiting before trying again');
+          await new Promise((r) => setTimeout(r, waitMs));
+          this.active = 0;
         }
       }
     }, request);
