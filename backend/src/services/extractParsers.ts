@@ -3,6 +3,15 @@ import { extractText, getDocumentProxy } from 'unpdf';
 
 export const MAX_PDF_PAGES = 400;
 
+/** A problem with the document that is safe and useful to show the user (raw parser errors are not). */
+export class ExtractionError extends Error {
+  readonly userFacing = true;
+  constructor(message: string) {
+    super(message);
+    this.name = 'ExtractionError';
+  }
+}
+
 export type DocumentKind = 'pdf' | 'docx' | 'text';
 
 /** Converts mammoth HTML to light Markdown so headings survive for chunking and source references. */
@@ -35,15 +44,15 @@ export async function parseDocument(kind: DocumentKind, data: Uint8Array): Promi
       pdf = await getDocumentProxy(data);
     } catch (err) {
       const name = (err as Error).name;
-      if (name === 'PasswordException') throw new Error('This PDF is password-protected. Remove the password and upload it again.');
-      throw new Error('This PDF could not be read. It may be corrupted.');
+      if (name === 'PasswordException') throw new ExtractionError('This PDF is password-protected. Remove the password and upload it again.');
+      throw new ExtractionError('This PDF could not be read. It may be corrupted.');
     }
-    if (pdf.numPages > MAX_PDF_PAGES) throw new Error(`This PDF has ${pdf.numPages} pages; the limit is ${MAX_PDF_PAGES}.`);
+    if (pdf.numPages > MAX_PDF_PAGES) throw new ExtractionError(`This PDF has ${pdf.numPages} pages; the limit is ${MAX_PDF_PAGES}.`);
     const { text } = await extractText(pdf, { mergePages: false });
     const pages = text as string[];
     const chars = pages.join('').replace(/\s/g, '').length;
     if (chars < 40 * Math.max(1, Math.min(pages.length, 5))) {
-      throw new Error('Almost no text was found. This looks like a scanned PDF; OCR is not supported yet.');
+      throw new ExtractionError('Almost no text was found. This looks like a scanned PDF; OCR is not supported yet.');
     }
     return pages;
   }

@@ -8,3 +8,4 @@ export * from './Presentation.js';
 export * from './Asset.js';
 export * from './Revision.js';
 export * from './Progress.js';
+export * from './AiUsage.js';

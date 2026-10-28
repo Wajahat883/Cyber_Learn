@@ -44,10 +44,20 @@ import { logger } from '../utils/logger.js';
 import { recordActivity } from './activity.js';
 import { storeAsset } from './assets.js';
 import { assemblePresentation, syncSlideToNarration } from './presentationAssembler.js';
+import { runWithAiOwner } from './aiBudget.js';
+import { deleteProjectData } from './projectData.js';
 import { env } from '../config/env.js';
+import { inc } from './metrics.js';
 
 class CancelledError extends Error {}
+/** The generation or its project was deleted while the run was in progress. */
+class GoneError extends Error {}
 class SkipStage extends Error {}
+
+/** Sections written in parallel during the lesson stage. */
+const SECTION_CONCURRENCY = 3;
+/** How often a running pipeline refreshes its heartbeat. */
+const HEARTBEAT_MS = 30_000;
 
 interface RunState {
   gen: GenerationDoc;
@@ -82,9 +92,18 @@ export function initialStageResults(): StageResult[] {
   return GENERATION_STAGES.map((stage) => ({ stage, status: 'pending', attempts: 0 }));
 }
 
+const saveChains = new WeakMap<GenerationDoc, Promise<unknown>>();
+
+/** Saves and publishes progress. Saves are serialized because sections are written concurrently. */
 async function emit(gen: GenerationDoc) {
-  await gen.save();
-  await publishGenerationEvent(toEvent(gen));
+  const previous = saveChains.get(gen) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(async () => {
+    if (gen.status === 'running') gen.heartbeatAt = new Date();
+    await gen.save();
+    await publishGenerationEvent(toEvent(gen));
+  });
+  saveChains.set(gen, next);
+  await next;
 }
 
 function stageOf(gen: GenerationDoc, stage: GenerationStage) {
@@ -103,18 +122,27 @@ function addUsage(state: RunState, usage: AiUsage) {
 }
 
 async function checkCancelled(state: RunState) {
-  const fresh = await Generation.findById(state.gen._id).select('cancelRequested').lean();
-  if (fresh?.cancelRequested) throw new CancelledError();
+  const [fresh, project] = await Promise.all([
+    Generation.findById(state.gen._id).select('cancelRequested').lean(),
+    Project.exists({ _id: state.gen.projectId }),
+  ]);
+  if (!fresh || !project) throw new GoneError();
+  if (fresh.cancelRequested) throw new CancelledError();
 }
 
 /** Safe, user-facing error text (no stack traces or provider secrets). */
 function safeError(err: unknown): string {
   if (err instanceof AiProviderError || err instanceof AiOutputError) return err.message;
-  if (err instanceof Error && /^(No readable|Source|Analysis|Lesson|Nothing)/.test(err.message)) return err.message;
+  if (err instanceof Error && /^(No readable|No diagram|Source|Analysis|Lesson|Nothing)/.test(err.message)) return err.message;
   return 'Unexpected error during this stage';
 }
 
-const isRetryable = (err: unknown) => (err instanceof AiProviderError && err.retryable) || err instanceof AiOutputError;
+/**
+ * Only transient provider failures (network, timeouts, 429, 5xx) are retried.
+ * An AiOutputError has already had its one repair attempt inside runStructured,
+ * so repeating the stage would just multiply cost (IMPROVEMENTS 2.3).
+ */
+export const isRetryable = (err: unknown) => err instanceof AiProviderError && err.retryable;
 const backoffMs = (attempt: number) => (env.isTest ? 0 : Math.min(30_000, 2000 * 2 ** (attempt - 1)));
 
 // ---------------------------------------------------------------- stage helpers
@@ -206,23 +234,55 @@ const STAGES: Record<GenerationStage, (state: RunState) => Promise<string | void
       await project.save();
     }
 
+    if (state.gen.regenerateSections) {
+      // An explicit retry of this stage rewrites every section (the previous text is kept as a version).
+      if ((lesson.sections ?? []).length) {
+        await LessonVersion.create({ ownerId: state.ownerId, lessonId: lesson._id, version: lesson.version, snapshot: lesson.toObject(), reason: 'regenerated' });
+        lesson.set({ version: lesson.version + 1 });
+      }
+      lesson.set({ sections: [], diagrams: [] });
+      await lesson.save();
+      state.gen.regenerateSections = false;
+      await emit(state.gen);
+    }
+
     // Sections already written in an earlier attempt are reused (partial-result recovery).
     const done = new Map(((lesson.sections ?? []) as LessonSection[]).map((s) => [s.id, s]));
-    const sections: LessonSection[] = [];
-    for (const [i, section] of planned.entries()) {
-      await checkCancelled(state);
-      const existing = done.get(section.id);
-      if (existing) {
-        sections.push(existing);
-        continue;
+    const results: (LessonSection | undefined)[] = planned.map((s) => done.get(s.id));
+    const ordered = () => results.filter((s): s is LessonSection => Boolean(s));
+    let saving: Promise<unknown> = Promise.resolve();
+    const persist = () => {
+      // Serialized: a Mongoose document cannot be saved in parallel.
+      saving = saving.then(() => {
+        lesson.set({ sections: ordered() });
+        return lesson.save();
+      });
+      return saving;
+    };
+
+    // Up to SECTION_CONCURRENCY sections are written at once; the saved order follows the plan.
+    const todo = planned.map((section, i) => ({ section, i })).filter(({ i }) => !results[i]);
+    let next = 0;
+    let failure: unknown;
+    const worker = async () => {
+      while (failure === undefined && next < todo.length) {
+        const { section, i } = todo[next++];
+        try {
+          await checkCancelled(state);
+          await setDetail(state, 'lesson', `Writing section ${i + 1} of ${planned.length}: ${section.title}`);
+          const { section: written, usage } = await generateSection(state.text, { section, chunks: relevantChunks(section, chunks), analysis, preferences: state.preferences });
+          addUsage(state, usage);
+          results[i] = LessonSectionSchema.parse(written);
+          await persist();
+        } catch (err) {
+          failure ??= err;
+        }
       }
-      await setDetail(state, 'lesson', `Writing section ${i + 1} of ${planned.length}: ${section.title}`);
-      const { section: written, usage } = await generateSection(state.text, { section, chunks: relevantChunks(section, chunks), analysis, preferences: state.preferences });
-      addUsage(state, usage);
-      sections.push(LessonSectionSchema.parse(written));
-      lesson.set({ sections: [...sections] });
-      await lesson.save();
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(SECTION_CONCURRENCY, todo.length) }, worker));
+    await saving.catch(() => undefined);
+    if (failure !== undefined) throw failure;
+    const sections = ordered();
     lesson.set({ sections });
     await lesson.save();
     return `${sections.length} sections written`;
@@ -231,12 +291,10 @@ const STAGES: Record<GenerationStage, (state: RunState) => Promise<string | void
   async assessment(state) {
     if (!state.preferences.quizzes && !state.preferences.flashcards) throw new SkipStage();
     const lesson = await lessonFor(state);
-    const chunks = await loadChunks(state);
     const { assessment, usage } = await generateAssessment(state.text, {
       title: lesson.title,
       sections: lesson.sections as LessonSection[],
       keyTerms: analysisOf(state).keyTerms,
-      sourceText: chunks.map((c) => c.text).join('\n\n'),
       preferences: state.preferences,
     });
     addUsage(state, usage);
@@ -275,6 +333,7 @@ const STAGES: Record<GenerationStage, (state: RunState) => Promise<string | void
     const existing = (lesson.diagrams ?? []) as DiagramSpec[];
     const diagrams: DiagramSpec[] = [...existing];
     const problems: string[] = [];
+    const providerErrors: AiProviderError[] = [];
     for (const [i, visual] of plan.diagrams.entries()) {
       await checkCancelled(state);
       if (existing.some((d) => d.id.endsWith(visual.id) && d.sectionId === visual.sectionId)) continue;
@@ -292,14 +351,17 @@ const STAGES: Record<GenerationStage, (state: RunState) => Promise<string | void
         addUsage(state, usage);
         diagrams.push(diagram);
       } catch (err) {
-        if (err instanceof CancelledError) throw err;
+        if (err instanceof CancelledError || isGoneError(err)) throw err;
+        if (err instanceof AiProviderError) providerErrors.push(err);
         problems.push(`${section.title}: ${safeError(err)}`);
         logger.warn({ err, visual: visual.id }, 'Diagram rejected');
       }
     }
     lesson.set({ diagrams });
     await lesson.save();
-    if (!diagrams.length && problems.length) throw new Error(`No diagram passed validation (${problems[0]})`);
+    // Every diagram failed at the provider (credits, auth, outage): report that error, keeping its retry semantics.
+    if (!diagrams.length && providerErrors.length && providerErrors.length === problems.length) throw providerErrors[0];
+    if (!diagrams.length && problems.length) throw new Error(`No diagram could be generated (${problems[0]})`);
     return `${diagrams.length} diagrams${problems.length ? `, ${problems.length} rejected by validation` : ''}`;
   },
 
@@ -456,23 +518,56 @@ const STAGES: Record<GenerationStage, (state: RunState) => Promise<string | void
 
 // ---------------------------------------------------------------- runner
 
+/** Runs whose heartbeat is older than this are considered crashed. */
+export const staleCutoff = (now = Date.now()) => new Date(now - env.GENERATION_STALE_MINUTES * 60_000);
+
+const isGoneError = (err: unknown) => err instanceof GoneError || (err instanceof Error && err.name === 'DocumentNotFoundError');
+
 /**
  * Runs (or resumes) a generation. Completed stages are skipped, so the same job
  * can be retried safely after a crash or a partial failure (spec 12).
+ *
+ * The run is claimed with an atomic queued -> running transition, so a duplicate
+ * job (double submit, redelivery) exits immediately. A "running" run is only
+ * taken over when its heartbeat is stale, i.e. its previous worker died.
  */
 export async function runGeneration(generationId: string): Promise<void> {
-  const gen = (await Generation.findById(generationId)) as GenerationDoc | null;
-  if (!gen || ['completed', 'cancelled'].includes(gen.status)) return;
-  if (gen.cancelRequested) {
-    gen.status = 'cancelled';
-    await emit(gen);
+  const gen = (await Generation.findOneAndUpdate(
+    { _id: generationId, cancelRequested: false, $or: [{ status: 'queued' }, { status: 'running', heartbeatAt: { $lt: staleCutoff() } }] },
+    { $set: { status: 'running', heartbeatAt: new Date(), errorMessage: '', errorCode: '' } },
+    { new: true },
+  )) as GenerationDoc | null;
+  if (!gen) {
+    // Not claimable: already running elsewhere, finished, or cancelled while it waited in the queue.
+    const cancelled = (await Generation.findOne({ _id: generationId, status: 'queued', cancelRequested: true })) as GenerationDoc | null;
+    if (cancelled) {
+      cancelled.status = 'cancelled';
+      cancelled.currentStage = null;
+      await emit(cancelled);
+    }
     return;
   }
+  // Liveness signal for the stale-run sweeper while long AI calls are in flight.
+  const heartbeat = setInterval(() => {
+    void Generation.updateOne({ _id: gen._id, status: 'running' }, { $set: { heartbeatAt: new Date() } }).catch(() => undefined);
+  }, HEARTBEAT_MS);
+  heartbeat.unref?.();
+  try {
+    // Image and speech calls carry no owner id; the async scope attributes them to this user's budget.
+    await runWithAiOwner(String(gen.ownerId), () => runClaimed(gen));
+  } finally {
+    clearInterval(heartbeat);
+  }
+}
+
+async function runClaimed(gen: GenerationDoc): Promise<void> {
+  const generationId = String(gen._id);
   let text: TextGenerationProvider;
   try {
     text = await textProviderFor(String(gen.ownerId));
   } catch (err) {
     gen.status = 'failed';
+    gen.currentStage = null;
     gen.errorMessage = safeError(err);
     await emit(gen);
     return;
@@ -484,10 +579,8 @@ export async function runGeneration(generationId: string): Promise<void> {
     usage: { calls: 0, inputChars: 0, outputChars: 0 },
     text,
   };
-  gen.status = 'running';
-  gen.attemptCount += 1;
   gen.startedAt ??= new Date();
-  gen.errorMessage = '';
+  let gone = false;
   await Project.updateOne({ _id: gen.projectId }, { $set: { 'status.content': 'generating', 'status.media': 'generating' } });
   await emit(gen);
 
@@ -513,6 +606,7 @@ export async function runGeneration(generationId: string): Promise<void> {
           break;
         } catch (err) {
           if (err instanceof CancelledError) throw err;
+          if (isGoneError(err)) throw new GoneError();
           if (err instanceof SkipStage) {
             result.status = 'skipped';
             result.detail = 'Not requested';
@@ -559,6 +653,15 @@ export async function runGeneration(generationId: string): Promise<void> {
     await emit(gen);
     await recordActivity({ ownerId: state.ownerId, type: 'generation_finished', projectId: gen.projectId, lessonId: gen.lessonId, detail: gen.status });
   } catch (err) {
+    if (isGoneError(err) || !(await Generation.exists({ _id: gen._id })) || !(await Project.exists({ _id: gen.projectId }))) {
+      // The project (or this run) was deleted mid-run: stop, and remove anything written after the delete.
+      gone = true;
+      logger.info({ generationId }, 'Generation stopped: its project was deleted');
+      if (!(await Project.exists({ _id: gen.projectId }))) {
+        await deleteProjectData(state.ownerId, String(gen.projectId)).catch((e) => logger.warn({ err: e, generationId }, 'Cleanup after deleted project failed'));
+      }
+      return;
+    }
     if (err instanceof CancelledError) {
       for (const s of gen.stageResults) if (s.status === 'running') s.status = 'pending';
       gen.status = 'cancelled';
@@ -573,13 +676,14 @@ export async function runGeneration(generationId: string): Promise<void> {
     await emit(gen);
     throw err;
   } finally {
+    if (['completed', 'partially_completed', 'failed', 'cancelled'].includes(gen.status)) inc('cyberlearn_generations_total', { status: gen.status });
     // Usage and cost tracking (spec 12).
     gen.usage = {
       aiCalls: (gen.usage?.aiCalls ?? 0) + state.usage.calls,
       inputChars: (gen.usage?.inputChars ?? 0) + state.usage.inputChars,
       outputChars: (gen.usage?.outputChars ?? 0) + state.usage.outputChars,
     };
-    await gen.save().catch(() => undefined);
+    if (!gone) await gen.save().catch(() => undefined);
     await User.updateOne(
       { _id: state.ownerId },
       { $inc: { 'usage.aiCalls': state.usage.calls, 'usage.inputChars': state.usage.inputChars, 'usage.outputChars': state.usage.outputChars } },
@@ -590,14 +694,23 @@ export async function runGeneration(generationId: string): Promise<void> {
 /** Stages whose output depends on earlier stages and must be rebuilt after a retry. */
 const DOWNSTREAM: GenerationStage[] = ['presentation', 'narration', 'finalize'];
 
-/** Resets failed stages (or one chosen stage) plus the stages that assemble their output. */
+/** Stages whose explicit retry rewrites the lesson text, so everything after them is rebuilt too. */
+const CONTENT_STAGES: GenerationStage[] = ['analyze', 'lesson'];
+
+/**
+ * Resets failed stages (or one chosen stage) plus the stages that assemble their output.
+ * An explicit retry of the analyze/lesson stage also flags the run to rewrite its sections
+ * (otherwise they would be reused) and resets every later stage.
+ */
 export function resetForRetry(gen: GenerationDoc, stage?: GenerationStage): boolean {
   const targets = stage ? [stage] : gen.stageResults.filter((s) => s.status === 'failed').map((s) => s.stage);
   if (!targets.length) return false;
   const firstIndex = Math.min(...targets.map((t) => GENERATION_STAGES.indexOf(t)));
+  const rebuildAll = Boolean(stage && CONTENT_STAGES.includes(stage));
+  if (rebuildAll) gen.regenerateSections = true;
   for (const s of gen.stageResults) {
     const idx = GENERATION_STAGES.indexOf(s.stage);
-    if (targets.includes(s.stage) || (idx > firstIndex && DOWNSTREAM.includes(s.stage)) || (idx > firstIndex && s.status === 'pending')) {
+    if (targets.includes(s.stage) || (idx > firstIndex && (rebuildAll || DOWNSTREAM.includes(s.stage))) || (idx > firstIndex && s.status === 'pending')) {
       s.status = 'pending';
       s.error = undefined;
       s.detail = undefined;

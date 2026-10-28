@@ -6,7 +6,6 @@ export interface AssessmentContext {
   title: string;
   sections: LessonSection[];
   keyTerms: KeyTerm[];
-  sourceText: string;
   preferences: GenerationPreferences;
 }
 

@@ -69,6 +69,18 @@ export async function drainInlineJobs() {
 
 // ---------------------------------------------------------------- public API
 
+/** Deterministic job id for one queued run of a generation: a double submit cannot add a second job. */
+export const generationJobId = (generationId: unknown, attempt: number) => `gen-${String(generationId)}-${attempt}`;
+
+/** True when the job is still waiting, delayed or active (used by the stale-run sweeper). */
+export async function isJobPending(name: JobName, jobId: string): Promise<boolean> {
+  if (!useRedis) return running.has(jobId);
+  const job = await queue(QUEUE_FOR[name]).getJob(jobId);
+  if (!job) return false;
+  const state = await job.getState();
+  return ['waiting', 'delayed', 'active', 'prioritized', 'waiting-children'].includes(state);
+}
+
 export async function enqueue<N extends JobName>(name: N, data: JobPayloads[N], jobId: string) {
   if (!useRedis) {
     runInline(name, data, jobId);

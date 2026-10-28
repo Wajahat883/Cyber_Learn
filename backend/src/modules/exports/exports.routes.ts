@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { ExportRequestSchema } from '@cyberlearn/shared';
 import { findOwned } from '../../middleware/authorize.js';
+import { exportLimiter } from '../../middleware/rateLimit.js';
 import { validate, validateIds } from '../../middleware/validate.js';
 import { Asset, Lesson, Presentation, Project } from '../../models/index.js';
 import { enqueue } from '../../jobs/queues.js';
@@ -26,19 +27,25 @@ async function requestExport(ownerId: string, lessonId: unknown, projectId: unkn
     status: 'pending',
   });
   await Project.updateOne({ _id: projectId }, { $set: { 'status.export': 'generating' } });
-  await enqueue('media:export', { assetId: String(asset._id) }, `export-${asset._id}`);
+  try {
+    await enqueue('media:export', { assetId: String(asset._id) }, `export-${asset._id}`);
+  } catch (err) {
+    await Asset.updateOne({ _id: asset._id }, { $set: { status: 'failed', error: 'The job queue is unavailable' } });
+    await Project.updateOne({ _id: projectId }, { $set: { 'status.export': 'failed' } });
+    throw err;
+  }
   return asset;
 }
 
 /** Spec 7.5: request an export of a presentation (PPTX) or its lesson notes (PDF, Markdown). */
-exportsRouter.post('/presentations/:id/exports', validateIds('id'), validate(ExportRequestSchema), async (req, res) => {
+exportsRouter.post('/presentations/:id/exports', exportLimiter, validateIds('id'), validate(ExportRequestSchema), async (req, res) => {
   const ownerId = userId(req);
   const presentation = await findOwned(Presentation, param(req, 'id'), ownerId, 'Presentation');
   const asset = await requestExport(ownerId, presentation.lessonId, presentation.projectId, presentation.title, req.body.format, req.body.includeQuestions);
   res.status(202).json({ export: asset });
 });
 
-exportsRouter.post('/lessons/:id/exports', validateIds('id'), validate(ExportRequestSchema), async (req, res) => {
+exportsRouter.post('/lessons/:id/exports', exportLimiter, validateIds('id'), validate(ExportRequestSchema), async (req, res) => {
   const ownerId = userId(req);
   const lesson = await findOwned(Lesson, param(req, 'id'), ownerId, 'Lesson');
   if (req.body.format === 'pptx' && !(await Presentation.exists({ ownerId, lessonId: lesson._id }))) throw badRequest('This lesson has no presentation yet');

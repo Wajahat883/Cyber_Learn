@@ -9,7 +9,8 @@ CyberLearn AI turns pasted notes or uploaded documents (PDF, DOCX, TXT, Markdown
 Requires Docker with Compose v2.24 or newer (on Kali/Debian: `sudo apt install docker.io docker-compose`, or Docker's `docker-ce` + `docker-compose-plugin`; then add yourself to the `docker` group and log in again).
 
 ```bash
-cp .env.example .env          # optional: add AI provider keys (see below)
+cp .env.example .env          # then set SESSION_SECRET and SECRETS_KEY (required), optionally AI provider keys
+#   e.g. sed -i "s/^SESSION_SECRET=.*/SESSION_SECRET=$(openssl rand -hex 32)/; s/^SECRETS_KEY=.*/SECRETS_KEY=$(openssl rand -hex 32)/" .env
 docker compose up --build -d  # MongoDB, Redis, API, worker, web
 # open http://localhost:8080
 docker compose logs -f api worker
@@ -17,7 +18,9 @@ docker compose down           # stop (data stays in Docker volumes)
 ```
 
 Optional S3-compatible storage with MinIO instead of the local volume:
-`STORAGE_DRIVER=s3 docker compose --profile s3 up --build -d` (MinIO console on http://localhost:9001).
+`STORAGE_DRIVER=s3 docker compose --profile s3 up --build -d` (MinIO console on http://127.0.0.1:9001, local machine only). Set `STORAGE_ACCESS_KEY` / `STORAGE_SECRET_KEY` in `.env` first; there are no default MinIO credentials.
+
+The API refuses to start in production with a missing, short or placeholder `SESSION_SECRET` / `SECRETS_KEY`, and warns when `COOKIE_SECURE=false` (set it to `true` behind HTTPS). `SECRETS_KEY` encrypts saved AI provider keys; when upgrading an install that ran without it, set it to the previous `SESSION_SECRET` so saved keys stay readable.
 
 ### Option B — local development
 

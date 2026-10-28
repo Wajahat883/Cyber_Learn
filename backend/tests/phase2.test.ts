@@ -83,6 +83,11 @@ describe('generation pipeline (Phase 2 acceptance)', () => {
     expect(correlation.sourceRefs.length).toBeGreaterThan(0);
     expect(correlation.grounding).toBe('source');
 
+    // The source passages behind a section, for the side-by-side view.
+    const source = await s.agent.get(`/api/v1/lessons/${lesson._id}/sections/${correlation.id}/source`).expect(200);
+    expect(source.body.passages.length).toBeGreaterThan(0);
+    expect(source.body.passages.some((p: { text: string }) => p.text.includes('4625'))).toBe(true);
+
     // Editing with autosave keeps a version history.
     const edited = lesson.sections.map((x: { id: string; summary: string }) => (x.id === correlation.id ? { ...x, summary: 'Edited summary' } : x));
     const saved = await s.agent.patch(`/api/v1/lessons/${lesson._id}`).set('x-csrf-token', s.csrf).send({ sections: edited }).expect(200);
@@ -210,6 +215,7 @@ describe('generation pipeline (Phase 2 acceptance)', () => {
     const gen = await generate(owner, projectId, sourceId);
     await other.agent.get(`/api/v1/generations/${gen._id}`).expect(404);
     await other.agent.get(`/api/v1/lessons/${gen.lessonId}`).expect(404);
+    await other.agent.get(`/api/v1/lessons/${gen.lessonId}/sections/any/source`).expect(404);
     await other.agent.post(`/api/v1/generations/${gen._id}/retry`).set('x-csrf-token', other.csrf).send({}).expect(404);
     // Using someone else's source id in your own project is rejected.
     const mine = await other.agent.post('/api/v1/projects').set('x-csrf-token', other.csrf).send({ title: 'x' });

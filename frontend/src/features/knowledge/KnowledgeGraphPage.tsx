@@ -75,6 +75,50 @@ export function KnowledgeGraphPage() {
 
   const positions = useMemo(() => forceLayout(visible.nodes.map((n) => n.id), visible.edges), [visible]);
 
+  const q = query.trim().toLowerCase();
+  const node = visible.nodes.find((n) => n.id === selected);
+  const neighbourEdges = useMemo(() => (node ? visible.edges.filter((e) => e.source === node.id || e.target === node.id) : []), [node, visible]);
+  const focus = useMemo(() => (node ? new Set([node.id, ...neighbourEdges.flatMap((e) => [e.source, e.target])]) : null), [node, neighbourEdges]);
+  const labels = useMemo(() => new Map((data?.nodes ?? []).map((n) => [n.id, n.label])), [data]);
+  const label = (id: string) => labels.get(id) ?? id;
+
+  const flowNodes = useMemo<Node<ConceptData>[]>(
+    () =>
+      visible.nodes.map((n) => ({
+        id: n.id,
+        type: 'concept',
+        position: positions.get(n.id) ?? { x: 0, y: 0 },
+        data: {
+          label: n.label,
+          colors: [...new Set(n.lessons.map((l) => l.color))].slice(0, 4),
+          weight: n.weight,
+          selected: n.id === selected,
+          dimmed: Boolean((focus && !focus.has(n.id)) || (q && !n.label.toLowerCase().includes(q))),
+        },
+        draggable: true,
+        ariaLabel: `${n.label}, in ${n.weight} lesson${n.weight === 1 ? '' : 's'}`,
+      })),
+    [visible, positions, selected, focus, q],
+  );
+  const flowEdges = useMemo<Edge[]>(
+    () =>
+      visible.edges.map((e) => {
+        const hot = focus?.has(e.source) && focus?.has(e.target) && (e.source === selected || e.target === selected);
+        return {
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          label: e.kind === 'stated' && (hot || !focus) ? e.label : undefined,
+          type: 'straight',
+          markerEnd: e.kind === 'stated' ? { type: MarkerType.ArrowClosed, color: hot ? colors.primary : colors.muted } : undefined,
+          style: { stroke: hot ? colors.primary : colors.muted, strokeWidth: hot ? 2 : 1, strokeDasharray: e.kind === 'related' ? '4 4' : undefined, opacity: focus && !hot ? 0.15 : 0.8 },
+          labelStyle: { fill: colors.muted, fontSize: 10 },
+          labelBgStyle: { fill: colors.surface },
+        };
+      }),
+    [visible, focus, selected, colors],
+  );
+
   if (isLoading) return <PageLoader />;
   if (!data?.nodes.length) {
     return (
@@ -88,40 +132,6 @@ export function KnowledgeGraphPage() {
     );
   }
 
-  const q = query.trim().toLowerCase();
-  const node = visible.nodes.find((n) => n.id === selected);
-  const neighbourEdges = node ? visible.edges.filter((e) => e.source === node.id || e.target === node.id) : [];
-  const focus = node ? new Set([node.id, ...neighbourEdges.flatMap((e) => [e.source, e.target])]) : null;
-  const label = (id: string) => data.nodes.find((n) => n.id === id)?.label ?? id;
-
-  const flowNodes: Node<ConceptData>[] = visible.nodes.map((n) => ({
-    id: n.id,
-    type: 'concept',
-    position: positions.get(n.id) ?? { x: 0, y: 0 },
-    data: {
-      label: n.label,
-      colors: [...new Set(n.lessons.map((l) => l.color))].slice(0, 4),
-      weight: n.weight,
-      selected: n.id === selected,
-      dimmed: Boolean((focus && !focus.has(n.id)) || (q && !n.label.toLowerCase().includes(q))),
-    },
-    draggable: true,
-    ariaLabel: `${n.label}, in ${n.weight} lesson${n.weight === 1 ? '' : 's'}`,
-  }));
-  const flowEdges: Edge[] = visible.edges.map((e) => {
-    const hot = focus?.has(e.source) && focus?.has(e.target) && (e.source === selected || e.target === selected);
-    return {
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      label: e.kind === 'stated' && (hot || !focus) ? e.label : undefined,
-      type: 'straight',
-      markerEnd: e.kind === 'stated' ? { type: MarkerType.ArrowClosed, color: hot ? colors.primary : colors.muted } : undefined,
-      style: { stroke: hot ? colors.primary : colors.muted, strokeWidth: hot ? 2 : 1, strokeDasharray: e.kind === 'related' ? '4 4' : undefined, opacity: focus && !hot ? 0.15 : 0.8 },
-      labelStyle: { fill: colors.muted, fontSize: 10 },
-      labelBgStyle: { fill: colors.surface },
-    };
-  });
   const bridges = data.nodes.filter((n) => new Set(n.lessons.map((l) => l.subject)).size > 1).length;
 
   return (

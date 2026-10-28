@@ -29,7 +29,8 @@
   color-scheme: light;
 }
 
-:root[data-theme='dark'] {
+:root[data-theme='dark'],
+.theme-dark {
   /* Dark — deep ink */
   --bg: #0e1014;
   --sidebar: #0b0d10;

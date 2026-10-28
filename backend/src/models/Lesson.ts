@@ -34,7 +34,9 @@ const lessonSchema = new Schema(
 
 lessonSchema.index({ ownerId: 1, projectId: 1 });
 lessonSchema.index({ ownerId: 1, updatedAt: -1 });
-lessonSchema.index({ title: 'text', summary: 'text', searchText: 'text' });
+// Owner-scoped text index: any $text query must include an equality match on ownerId.
+const LESSON_TEXT_INDEX = 'owner_text_search';
+lessonSchema.index({ ownerId: 1, title: 'text', summary: 'text', searchText: 'text' }, { name: LESSON_TEXT_INDEX });
 
 lessonSchema.pre('save', function () {
   const sections = (this.sections ?? []) as LessonSection[];
@@ -51,6 +53,15 @@ export type LessonDoc = HydratedDocument<InferSchemaType<typeof lessonSchema>> &
   conceptLinks: ConceptRelationship[];
 };
 export const Lesson = model('Lesson', lessonSchema);
+
+// A collection can have only one text index: replace the old unscoped one on existing databases.
+Lesson.on('index', (err?: Error) => {
+  if (!err || !/text index|IndexOptionsConflict|equivalent index/i.test(err.message)) return;
+  Lesson.collection
+    .dropIndex('title_text_summary_text_searchText_text')
+    .then(() => Lesson.createIndexes())
+    .catch(() => undefined);
+});
 
 /** Previous versions are preserved whenever a lesson is edited or regenerated (Roman Urdu section 7). */
 const lessonVersionSchema = new Schema(

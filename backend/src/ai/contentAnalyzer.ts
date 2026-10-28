@@ -8,6 +8,8 @@ export interface ChunkInput {
   heading: string;
   page: number;
   sourceId: string;
+  /** Database id of the chunk (when loaded from the database), for caching embeddings. */
+  id?: string;
 }
 
 export interface AnalyzeContext {

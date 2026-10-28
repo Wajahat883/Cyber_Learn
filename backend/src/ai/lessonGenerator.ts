@@ -8,6 +8,7 @@ import {
 import { z } from 'zod';
 import { renderChunks, type ChunkInput } from './contentAnalyzer.js';
 import { EXAMPLES_INSTRUCTIONS, SECTION_INSTRUCTIONS } from './prompts/index.js';
+import { findUnverifiedClaims } from './verbatim.js';
 import type { AiUsage, TextGenerationProvider } from './types.js';
 
 export interface SectionContext {
@@ -45,19 +46,24 @@ Other sections in this lesson: ${ctx.analysis.sections.map((s) => s.title).join(
 ${renderChunks(ctx.chunks)}`;
   const { data, usage } = await provider.generateStructured({
     task: 'section',
-    instructions: SECTION_INSTRUCTIONS(ctx.preferences, ctx.section.title),
+    instructions: SECTION_INSTRUCTIONS(ctx.preferences),
     content,
     schema: GeneratedSectionSchema,
     context: ctx,
   });
   const byIndex = new Map(ctx.chunks.map((c) => [c.index, c]));
-  const used = data.sourceChunks.filter((i) => byIndex.has(i));
-  const refs = (used.length ? used : ctx.chunks.map((c) => c.index)).map((i) => {
+  // Only chunks the model actually cited are credited; an uncited section records no citation
+  // (it is not credited to every input chunk).
+  const used = [...new Set(data.sourceChunks.filter((i) => byIndex.has(i)))];
+  const refs = used.map((i) => {
     const chunk = byIndex.get(i)!;
     return { sourceId: chunk.sourceId, chunkIndex: i, excerpt: chunk.text.slice(0, 280) };
   });
   const { sourceChunks: _ignored, ...rest } = data;
-  return { section: { ...rest, id: ctx.section.id, title: ctx.section.title, sourceRefs: refs }, usage };
+  // Commands / event IDs / queries must appear in the cited source (or, when nothing is cited, in the material given).
+  const evidence = (used.length ? used.map((i) => byIndex.get(i)!) : ctx.chunks).map((c) => `${c.heading}\n${c.text}`).join('\n');
+  const unverifiedClaims = findUnverifiedClaims(rest, evidence);
+  return { section: { ...rest, id: ctx.section.id, title: ctx.section.title, sourceRefs: refs, unverifiedClaims }, usage };
 }
 
 export const ExamplesSchema = z.object({
@@ -67,7 +73,7 @@ export const ExamplesSchema = z.object({
 export async function generateExamples(provider: TextGenerationProvider, ctx: { section: LessonSection; chunks: ChunkInput[]; preferences: GenerationPreferences }) {
   return provider.generateStructured({
     task: 'examples',
-    instructions: EXAMPLES_INSTRUCTIONS(ctx.preferences, ctx.section.title),
+    instructions: EXAMPLES_INSTRUCTIONS(ctx.preferences),
     content: `Section: ${ctx.section.title}\n${ctx.section.explanation}\n\n${renderChunks(ctx.chunks)}`,
     schema: ExamplesSchema,
     context: ctx,

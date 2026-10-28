@@ -28,10 +28,13 @@ async function deleteStorageKeys(keys: string[]) {
 /** Deletes a project and every document and stored file derived from it (spec 15 deletion policy). */
 export async function deleteProjectData(ownerId: string, projectId: string) {
   const filter = { ownerId, projectId };
+  // Stop running pipelines first: they check this flag (and the project's existence)
+  // between stages and sections, and clean up anything they wrote after the delete.
+  await Generation.updateMany({ ...filter, status: { $in: ['queued', 'running', 'awaiting_review'] } }, { $set: { cancelRequested: true } });
   const lessons = await Lesson.find(filter).select('_id').lean();
   const lessonIds = lessons.map((l) => l._id);
   const presentations = await Presentation.find(filter).select('_id').lean();
-  const assets = await Asset.find(filter).select('storageKey').lean();
+  const assets = await Asset.find(filter).select('+storageKey').lean();
   const sources = await Source.find(filter).select('storageKey').lean();
   const quizzes = await Quiz.find(filter).select('_id').lean();
   const flashcards = await Flashcard.find(filter).select('_id').lean();
@@ -88,7 +91,7 @@ export async function duplicateProject(ownerId: string, projectId: string) {
   }
 
   const assetMap = new Map<string, Types.ObjectId>();
-  for (const asset of await Asset.find({ ownerId, projectId, assetType: { $in: ['image', 'audio'] } }).lean()) {
+  for (const asset of await Asset.find({ ownerId, projectId, assetType: { $in: ['image', 'audio'] } }).select('+storageKey').lean()) {
     const { _id: oldId, createdAt: _ac, updatedAt: _au, ...a } = asset;
     const storageKey = a.storageKey ? newKey(a.storageKey, newProjectId) : '';
     if (a.storageKey) await storage.copy(a.storageKey, storageKey);

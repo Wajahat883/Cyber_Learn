@@ -4,15 +4,17 @@ import '@xyflow/react/dist/style.css';
 import type { DiagramSpec, NodeKind } from '@cyberlearn/shared';
 import { KIND_COLORS, layoutDiagram, NODE_H, NODE_W } from '@cyberlearn/shared';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import { iconFor } from './securityIcons';
 
 type DiagramNodeData = { label: string; kind: NodeKind; selected: boolean; dimmed: boolean; highlighted: boolean; direction: 'LR' | 'TB' };
 
 const DiagramNode = memo(function DiagramNode({ data }: NodeProps<Node<DiagramNodeData>>) {
   const color = KIND_COLORS[data.kind];
   const lr = data.direction === 'LR';
+  const Icon = iconFor(data.label, data.kind);
   return (
     <div
-      className="rounded-xl border-2 bg-surface shadow-card px-3 flex flex-col justify-center text-center transition-all duration-300"
+      className="rounded-xl border-2 bg-surface shadow-card pl-2.5 pr-3 flex items-center gap-2.5 transition-all duration-300"
       style={{
         width: NODE_W,
         height: NODE_H,
@@ -23,9 +25,14 @@ const DiagramNode = memo(function DiagramNode({ data }: NodeProps<Node<DiagramNo
       }}
     >
       <Handle type="target" position={lr ? Position.Left : Position.Top} className="!opacity-0" />
-      <span className="text-[13px] font-semibold text-text leading-tight line-clamp-2">{data.label}</span>
-      <span className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color }}>
-        {data.kind}
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg" style={{ background: `${color}22`, color }}>
+        <Icon className="h-[18px] w-[18px]" aria-hidden />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col text-center">
+        <span className="text-[13px] font-semibold text-text leading-tight line-clamp-2">{data.label}</span>
+        <span className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color }}>
+          {data.kind}
+        </span>
       </span>
       <Handle type="source" position={lr ? Position.Right : Position.Bottom} className="!opacity-0" />
     </div>
@@ -56,44 +63,52 @@ export function DiagramView({
 }) {
   const layout = useMemo(() => layoutDiagram(diagram), [diagram]);
   const colors = useThemeColors();
-  const nodes: Node<DiagramNodeData>[] = layout.nodes
-    .filter((n) => !visibleIds || visibleIds.has(n.id))
-    .map((n) => ({
-      id: n.id,
-      type: 'diagram',
-      position: { x: n.x, y: n.y },
-      data: {
-        label: n.label,
-        kind: n.kind,
-        selected: n.id === selectedId,
-        highlighted: Boolean(highlightIds?.has(n.id)),
-        dimmed: Boolean(highlightIds && highlightIds.size > 0 && !highlightIds.has(n.id)),
-        direction: diagram.direction,
-      },
-      draggable: false,
-      selectable: interactive,
-      ariaLabel: `${n.label} (${n.kind})`,
-    }));
-  const visibleNodes = new Set(nodes.map((n) => n.id));
-  const edges: Edge[] = diagram.edges
-    .filter((e) => visibleNodes.has(e.source) && visibleNodes.has(e.target) && (!visibleIds || visibleIds.has(e.id) || !diagram.edges.some((x) => visibleIds.has(x.id))))
-    .map((e) => {
-      const hot = highlightIds?.has(e.id);
-      return {
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        label: e.label || undefined,
-        type: 'smoothstep',
-        animated: Boolean(hot),
-        markerEnd: { type: MarkerType.ArrowClosed, color: hot ? colors.primary : colors.muted },
-        style: { stroke: hot ? colors.primary : colors.muted, strokeWidth: hot ? 2.5 : 1.5, opacity: highlightIds && highlightIds.size > 0 && !hot ? 0.25 : 1 },
-        labelStyle: { fill: colors.muted, fontSize: 11 },
-        labelBgStyle: { fill: colors.surface },
-        labelBgPadding: [6, 3] as [number, number],
-        labelBgBorderRadius: 4,
-      };
-    });
+  const nodes = useMemo<Node<DiagramNodeData>[]>(
+    () =>
+      layout.nodes
+        .filter((n) => !visibleIds || visibleIds.has(n.id))
+        .map((n) => ({
+          id: n.id,
+          type: 'diagram',
+          position: { x: n.x, y: n.y },
+          data: {
+            label: n.label,
+            kind: n.kind,
+            selected: n.id === selectedId,
+            highlighted: Boolean(highlightIds?.has(n.id)),
+            dimmed: Boolean(highlightIds && highlightIds.size > 0 && !highlightIds.has(n.id)),
+            direction: diagram.direction,
+          },
+          draggable: false,
+          selectable: interactive,
+          ariaLabel: `${n.label} (${n.kind})`,
+        })),
+    [layout, visibleIds, selectedId, highlightIds, diagram.direction, interactive],
+  );
+  const edges = useMemo<Edge[]>(() => {
+    const visibleNodes = new Set(nodes.map((n) => n.id));
+    // When the visible set lists no edges at all, every edge between visible nodes shows (computed once, not per edge).
+    const filtersEdges = Boolean(visibleIds && diagram.edges.some((x) => visibleIds.has(x.id)));
+    return diagram.edges
+      .filter((e) => visibleNodes.has(e.source) && visibleNodes.has(e.target) && (!filtersEdges || visibleIds!.has(e.id)))
+      .map((e) => {
+        const hot = highlightIds?.has(e.id);
+        return {
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          label: e.label || undefined,
+          type: 'smoothstep',
+          animated: Boolean(hot),
+          markerEnd: { type: MarkerType.ArrowClosed, color: hot ? colors.primary : colors.muted },
+          style: { stroke: hot ? colors.primary : colors.muted, strokeWidth: hot ? 2.5 : 1.5, opacity: highlightIds && highlightIds.size > 0 && !hot ? 0.25 : 1 },
+          labelStyle: { fill: colors.muted, fontSize: 11 },
+          labelBgStyle: { fill: colors.surface },
+          labelBgPadding: [6, 3] as [number, number],
+          labelBgBorderRadius: 4,
+        };
+      });
+  }, [nodes, diagram.edges, visibleIds, highlightIds, colors]);
 
   return (
     <ReactFlow

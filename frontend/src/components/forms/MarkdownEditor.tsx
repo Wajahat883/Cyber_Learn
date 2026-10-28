@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from 'tiptap-markdown';
 import { Bold, Code, Heading3, Italic, List, ListOrdered, SquareCode } from 'lucide-react';
 import { cn } from '../../lib/cn';
+
+const getMarkdown = (editor: Editor) => (editor.storage as unknown as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown();
 
 interface Props {
   value: string;
@@ -21,13 +23,13 @@ export function MarkdownEditor({ value, onChange, label, placeholder }: Props) {
     extensions: [StarterKit.configure({ heading: { levels: [3, 4] } }), Markdown.configure({ html: false, transformPastedText: true, linkify: false })],
     content: value,
     editorProps: { attributes: { class: 'prose-cl tiptap px-3 py-2', 'aria-label': label, role: 'textbox', 'aria-multiline': 'true' } },
-    onUpdate: ({ editor: e }) => onChange((e.storage as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown()),
+    onUpdate: ({ editor: e }) => onChange(getMarkdown(e)),
   });
 
   // Keep external resets (e.g. restoring a version) in sync without fighting the cursor.
   useEffect(() => {
     if (!editor) return;
-    const current = (editor.storage as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown();
+    const current = getMarkdown(editor);
     if (current !== value && !editor.isFocused) editor.commands.setContent(value);
   }, [value, editor]);
 

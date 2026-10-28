@@ -1,18 +1,62 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Cpu, ExternalLink, KeyRound, RefreshCw, Server, Zap } from 'lucide-react';
-import type { AiProviderId, AiProviderPreset } from '@cyberlearn/shared';
+import { CheckCircle2, Cpu, ExternalLink, KeyRound, RefreshCw, Server, Sparkles, Zap } from 'lucide-react';
+import { MAX_FALLBACK_MODELS, type AiProviderId, type AiProviderPreset } from '@cyberlearn/shared';
 import { api, errorMessage } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { Card, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Field';
+import { Input, Textarea } from '../../components/ui/Field';
 import { Alert, Badge } from '../../components/ui/Feedback';
 
 interface AiSettingsResponse {
-  settings: { provider: AiProviderId; model: string; baseUrl: string; hasKey: boolean; keyHint: string; updatedAt: string } | null;
+  settings: { provider: AiProviderId; model: string; fallbackModels?: string[]; baseUrl: string; hasKey: boolean; keyHint: string; updatedAt: string } | null;
   serverDefault: { provider: string; model: string };
   presets: AiProviderPreset[];
+  usage: {
+    calls: number;
+    chars: number;
+    /** Real provider token counts (older servers omit them). */
+    tokens?: { input: number; output: number; cacheRead?: number; cacheWrite?: number };
+    limits: { calls: number; chars: number };
+  };
+}
+
+/** Today's AI usage against the daily ceiling (the tighter of the two limits). */
+function UsageLine({ usage }: { usage: AiSettingsResponse['usage'] }) {
+  const parts = [usage.limits.calls ? usage.calls / usage.limits.calls : 0, usage.limits.chars ? usage.chars / usage.limits.chars : 0];
+  const used = Math.min(1, Math.max(...parts));
+  // Prefer measured tokens; fall back to the ~4 characters per token estimate.
+  const tokenCount = usage.tokens ? usage.tokens.input + usage.tokens.output : usage.chars / 4;
+  const tokensLabel = `${usage.tokens ? '' : '~'}${(tokenCount / 1000).toFixed(1)}k tokens`;
+  if (!usage.limits.calls && !usage.limits.chars) return <p className="text-xs text-muted mb-4">Today: {usage.calls} AI calls · {tokensLabel} (no daily limit).</p>;
+  return (
+    <div className="mb-4">
+      <div className="flex justify-between text-xs text-muted mb-1">
+        <span>
+          Today: {usage.calls} AI calls · {tokensLabel}
+        </span>
+        <span>{Math.round(used * 100)}% of daily limit</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden" role="progressbar" aria-valuenow={Math.round(used * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Daily AI usage">
+        <div className={cn('h-full rounded-full', used >= 0.9 ? 'bg-error' : used >= 0.7 ? 'bg-warning' : 'bg-primary')} style={{ width: `${used * 100}%` }} />
+      </div>
+    </div>
+  );
+}
+
+/** One model id per line; blanks, duplicates and the main model are dropped. */
+export function parseFallbackModels(text: string, mainModel: string): string[] {
+  const ids = text
+    .split(/[\n,]/)
+    .map((m) => m.trim())
+    .filter((m) => m && m !== mainModel);
+  return [...new Set(ids)].slice(0, MAX_FALLBACK_MODELS);
+}
+
+/** Free OpenRouter-style models (":free" suffix) to fall back on, excluding ones already chosen. */
+export function pickFreeModels(available: string[], chosen: string[], mainModel: string, count = 3): string[] {
+  return available.filter((m) => m.endsWith(':free') && m !== mainModel && !chosen.includes(m)).slice(0, count);
 }
 
 /**
@@ -26,6 +70,7 @@ export function AiProviderCard() {
   const [model, setModel] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
+  const [fallbackText, setFallbackText] = useState('');
   const [models, setModels] = useState<string[]>([]);
   const [tested, setTested] = useState<{ latencyMs: number; model: string } | null>(null);
 
@@ -34,13 +79,17 @@ export function AiProviderCard() {
       setProvider(data.settings.provider);
       setModel(data.settings.model);
       setBaseUrl(data.settings.baseUrl);
+      setFallbackText((data.settings.fallbackModels ?? []).join('\n'));
     }
   }, [data, provider]);
 
   const preset = data?.presets.find((p) => p.id === provider);
   const saved = data?.settings;
   const usingSavedKey = Boolean(saved?.hasKey && saved.provider === provider && !apiKey);
-  const body = () => ({ provider, model, baseUrl, ...(apiKey ? { apiKey } : {}) });
+  const supportsFallback = preset?.protocol === 'openai-compatible';
+  const fallbackModels = supportsFallback ? parseFallbackModels(fallbackText, model) : [];
+  const freeSuggestions = pickFreeModels(models, fallbackModels, model);
+  const body = () => ({ provider, model, baseUrl, fallbackModels, ...(apiKey ? { apiKey } : {}) });
   const reset = () => {
     setModels([]);
     setTested(null);
@@ -86,6 +135,7 @@ export function AiProviderCard() {
           <>
             Lessons are generated with <strong className="text-text">{data?.presets.find((p) => p.id === saved.provider)?.label}</strong>
             {saved.model && <> · {saved.model}</>}
+            {(saved.fallbackModels?.length ?? 0) > 0 && <> · {saved.fallbackModels!.length} fallback{saved.fallbackModels!.length > 1 ? 's' : ''}</>}
             {saved.keyHint && <> · key {saved.keyHint}</>}.
           </>
         ) : (
@@ -95,6 +145,7 @@ export function AiProviderCard() {
           </>
         )}
       </p>
+      {data?.usage && <UsageLine usage={data.usage} />}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" role="radiogroup" aria-label="AI provider">
         {data?.presets.map((p) => (
@@ -105,6 +156,7 @@ export function AiProviderCard() {
             onClick={() => {
               setProvider(p.id);
               setModel(saved?.provider === p.id ? saved.model : (p.suggestedModels[0] ?? ''));
+              setFallbackText(saved?.provider === p.id ? (saved.fallbackModels ?? []).join('\n') : '');
               setApiKey('');
               reset();
             }}
@@ -158,6 +210,33 @@ export function AiProviderCard() {
             </datalist>
             {models.length > 0 && <p className="text-xs text-muted mt-1.5">{models.length} models available — start typing to filter.</p>}
           </div>
+          {supportsFallback && (
+            <div>
+              <Textarea
+                label="Fallback models"
+                hint={`optional · up to ${MAX_FALLBACK_MODELS}, one per line`}
+                rows={3}
+                placeholder={'e.g. a model ending in :free'}
+                value={fallbackText}
+                onChange={(e) => (setFallbackText(e.target.value), setTested(null))}
+              />
+              <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                <p className="text-xs text-muted flex-1 min-w-48">
+                  When the main model runs out of credits, hits a rate limit or is unavailable, the next model is used automatically. The main model is tried again after an hour.
+                </p>
+                {freeSuggestions.length > 0 && fallbackModels.length < MAX_FALLBACK_MODELS && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    icon={<Sparkles className="h-4 w-4" />}
+                    onClick={() => setFallbackText([...fallbackModels, ...freeSuggestions].slice(0, MAX_FALLBACK_MODELS).join('\n'))}
+                  >
+                    Add free models
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
           {error && <Alert tone="error">{errorMessage(error)}</Alert>}
           {tested && (
             <Alert tone="success">

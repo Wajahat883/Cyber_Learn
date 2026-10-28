@@ -11,7 +11,8 @@ const assetSchema = new Schema(
     lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', default: null },
     assetType: { type: String, enum: ASSET_TYPES, required: true },
     filename: { type: String, default: '' },
-    storageKey: { type: String, default: '' },
+    /** Internal object-storage location: never returned by the API (select explicitly with '+storageKey'). */
+    storageKey: { type: String, default: '', select: false },
     mimeType: { type: String, default: 'application/octet-stream' },
     sizeBytes: { type: Number, default: 0 },
     checksum: { type: String, default: '' },
@@ -31,7 +32,16 @@ const assetSchema = new Schema(
     status: { type: String, enum: ['pending', 'processing', 'ready', 'failed'], default: 'pending' },
     error: { type: String, default: '' },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    toJSON: {
+      // Documents created or saved in a request still carry the key in memory.
+      transform: (_doc, ret: Record<string, unknown>) => {
+        delete ret.storageKey;
+        return ret;
+      },
+    },
+  },
 );
 
 assetSchema.index({ ownerId: 1, lessonId: 1, assetType: 1 });

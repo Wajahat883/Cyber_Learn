@@ -3,11 +3,19 @@ import { Asset, Lesson } from '../models/index.js';
 import type { LessonSection } from '@cyberlearn/shared';
 import { logger } from '../utils/logger.js';
 import { storeAsset } from './assets.js';
+import { runWithAiOwner } from './aiBudget.js';
+
+const loadAsset = (id: string) => Asset.findById(id).select('+storageKey');
 
 /** Regenerates one illustration in place: the asset id stays the same, so slides keep pointing at it. */
 export async function regenerateImage(assetId: string) {
-  const asset = await Asset.findById(assetId);
+  const asset = await loadAsset(assetId);
   if (!asset || asset.assetType !== 'image') return;
+  // Bill the image call to the asset's owner (the provider gets no owner id itself).
+  await runWithAiOwner(String(asset.ownerId), () => regenerate(assetId, asset));
+}
+
+async function regenerate(assetId: string, asset: NonNullable<Awaited<ReturnType<typeof loadAsset>>>) {
   const lesson = asset.lessonId ? await Lesson.findById(asset.lessonId).lean() : null;
   const section = (lesson?.sections as LessonSection[] | undefined)?.find((s) => s.id === asset.generationMetadata?.sectionId);
   const meta = asset.toObject().generationMetadata ?? { prompt: '' };

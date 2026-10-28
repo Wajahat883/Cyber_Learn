@@ -179,3 +179,32 @@ export interface WeakTopic {
   mistakes: number;
   attempts: number;
 }
+
+/** Row of `GET /lessons` (library, presentations, revision filters, command palette). */
+export interface LessonSummary {
+  _id: string;
+  title: string;
+  subject: string;
+  projectId: string;
+  generationStatus: string;
+  updatedAt: string;
+  sectionCount: number;
+  diagramCount: number;
+  presentation: { _id: string; version: number; slideCount: number } | null;
+}
+
+/** Row of `GET /lessons/:id/versions`. */
+export interface LessonVersionRow {
+  version: number;
+  reason: string;
+  createdAt: string;
+  snapshot: { title: string };
+}
+
+/** Row of `GET /presentations/:id/versions`. */
+export interface PresentationVersionRow {
+  version: number;
+  label: string;
+  createdAt: string;
+  slideCount: number;
+}

@@ -13,7 +13,8 @@ import { findOwned } from '../../middleware/authorize.js';
 import { validate, validateIds } from '../../middleware/validate.js';
 import { Flashcard, FlashcardReview, Lesson, QuestionBookmark, Quiz, QuizAttempt, type QuizDoc } from '../../models/index.js';
 import { recordActivity } from '../../services/activity.js';
-import { gradeAnswer } from '../../services/grading.js';
+import { gradeAnswers } from '../../services/grading.js';
+import { textProviderFor } from '../../ai/providers/userProviders.js';
 import { badRequest, notFound } from '../../utils/errors.js';
 import { param, userId } from '../../utils/http.js';
 import { dueRevisionCount, weakTopics } from '../progress/stats.service.js';
@@ -120,7 +121,9 @@ revisionRouter.post('/quizzes/:id/attempts', validateIds('id'), validate(QuizAtt
   const ids = new Set(quiz.questions.map((q) => q.id));
   if (body.answers.some((a) => !ids.has(a.questionId))) throw badRequest('Answer for an unknown question');
   const byQuestion = new Map(body.answers.map((a) => [a.questionId, a]));
-  const graded = quiz.questions.map((q) => gradeAnswer(q, byQuestion.get(q.id)));
+  // Optional AI rubric grading for open answers (AI_RUBRIC_GRADING); falls back to word overlap.
+  const provider = await textProviderFor(ownerId).catch(() => undefined);
+  const graded = await gradeAnswers(quiz.questions, byQuestion, { provider });
   const score = Math.round(graded.reduce((s, g) => s + g.score, 0) * 100) / 100;
   const attempt = await QuizAttempt.create({
     ownerId,

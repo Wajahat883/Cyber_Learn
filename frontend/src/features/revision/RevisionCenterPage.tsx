@@ -11,7 +11,7 @@ import { Select } from '../../components/ui/Field';
 import { Badge, EmptyState, PageLoader } from '../../components/ui/Feedback';
 import { timeAgo } from '../../utils/format';
 import type { Flashcard, WeakTopic } from '../../types/models';
-import { useLessons } from '../presentations/PresentationsPage';
+import { useLessons } from '../lessons/useLesson';
 import { QuestionCard, QuizRunner } from './QuizRunner';
 
 const GRADES = [

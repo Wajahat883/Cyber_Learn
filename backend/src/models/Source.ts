@@ -44,12 +44,28 @@ const sourceChunkSchema = new Schema(
     text: { type: String, required: true },
     heading: { type: String, default: '' },
     page: { type: Number, default: 0 },
+    /** Optional embedding vector for semantic Ask (computed lazily; never loaded unless selected). */
+    embedding: { type: [Number], default: undefined, select: false },
+    /** Model that produced `embedding`; vectors from another model are recomputed. */
+    embeddingModel: { type: String, default: undefined, select: false },
   },
   { timestamps: false },
 );
 
 sourceChunkSchema.index({ sourceId: 1, index: 1 }, { unique: true });
 sourceChunkSchema.index({ ownerId: 1, projectId: 1 });
-sourceChunkSchema.index({ text: 'text', heading: 'text' });
+// Owner-scoped text index: library search always filters by owner, so the owner is the index prefix
+// (an equality match on ownerId is then required for $text queries, which every caller does).
+const CHUNK_TEXT_INDEX = 'owner_text_search';
+sourceChunkSchema.index({ ownerId: 1, text: 'text', heading: 'text' }, { name: CHUNK_TEXT_INDEX });
 
 export const SourceChunk = model('SourceChunk', sourceChunkSchema);
+
+// A collection can have only one text index: replace the old unscoped one on existing databases.
+SourceChunk.on('index', (err?: Error) => {
+  if (!err || !/text index|IndexOptionsConflict|equivalent index/i.test(err.message)) return;
+  SourceChunk.collection
+    .dropIndex('text_text_heading_text')
+    .then(() => SourceChunk.createIndexes())
+    .catch(() => undefined);
+});

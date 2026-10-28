@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Play, RotateCcw, Square, Wifi, WifiOff } from 'lucide-react';
@@ -11,23 +11,29 @@ import { cn } from '../../lib/cn';
 import { Steps } from '../../components/ui/Steps';
 import type { Generation } from '../../types/models';
 import { AnalysisPreview } from './AnalysisPreview';
-import { useGenerationStream } from './useGenerationStream';
+import { TERMINAL_STATUSES, useGenerationStream } from './useGenerationStream';
 
 const RETRYABLE_COMPLETED: GenerationStage[] = ['diagrams', 'images', 'narration', 'assessment'];
-const TERMINAL = ['completed', 'partially_completed', 'failed', 'cancelled'];
+const TERMINAL = TERMINAL_STATUSES;
+/** How often to poll the generation record while the live stream is down. */
+const POLL_MS = 4000;
 
 /** Screen 4 — Generation Workspace with live progress. */
 export function GenerationPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  // Fallback when the SSE connection is down: poll the record so progress still moves.
+  const [pollWhileDisconnected, setPollWhileDisconnected] = useState(false);
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['generation', id],
     queryFn: () => api.get<{ generation: Generation; project: { _id: string; title: string } }>(`/generations/${id}`),
+    refetchInterval: pollWhileDisconnected ? POLL_MS : false,
   });
   const status = data?.generation.status;
   const live = Boolean(status && !TERMINAL.includes(status));
   const { event, connected } = useGenerationStream(id, live || status === 'awaiting_review');
+  useEffect(() => setPollWhileDisconnected(live && !connected), [live, connected]);
 
   // Refetch the full record when the status changes (analysis arrives, lesson created, finished).
   useEffect(() => {
@@ -37,6 +43,18 @@ export function GenerationPage() {
       qc.invalidateQueries({ queryKey: ['projects'] });
     }
   }, [event, status, refetch, qc]);
+
+  // A finished run creates or updates a lesson; lesson lists elsewhere must see it.
+  // Keyed on the record's status so it fires whether the change came via SSE or polling.
+  const prevStatus = useRef(status);
+  useEffect(() => {
+    const prev = prevStatus.current;
+    prevStatus.current = status;
+    if (prev && status && !TERMINAL.includes(prev) && TERMINAL.includes(status)) {
+      qc.invalidateQueries({ queryKey: ['lessons'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    }
+  }, [status, qc]);
 
   const retry = useMutation({ mutationFn: (stage?: GenerationStage) => api.post(`/generations/${id}/retry`, stage ? { stage } : {}), onSuccess: () => refetch() });
   const cancel = useMutation({ mutationFn: () => api.post(`/generations/${id}/cancel`), onSuccess: () => refetch() });

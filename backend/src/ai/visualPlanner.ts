@@ -77,7 +77,10 @@ const slug = (s: string) =>
  * invented); if the result still fails validation the diagram is rejected.
  */
 export async function generateDiagram(provider: TextGenerationProvider, ctx: DiagramContext): Promise<{ diagram: DiagramSpec; usage: AiUsage }> {
-  const content = `Section: ${ctx.section.title}
+  const content = `Diagram type: ${ctx.visual.type}
+Diagram purpose: ${ctx.visual.purpose}
+
+Section: ${ctx.section.title}
 ${ctx.section.definition}
 ${ctx.section.howItWorks}
 Key concepts: ${ctx.section.keyConcepts.join(', ')}
@@ -85,7 +88,7 @@ Key concepts: ${ctx.section.keyConcepts.join(', ')}
 ${renderChunks(ctx.chunks)}`;
   const { data, usage } = await provider.generateStructured({
     task: 'diagram',
-    instructions: DIAGRAM_INSTRUCTIONS(ctx.visual.type, ctx.visual.purpose),
+    instructions: DIAGRAM_INSTRUCTIONS(),
     content,
     schema: GeneratedDiagramSchema,
     context: ctx,

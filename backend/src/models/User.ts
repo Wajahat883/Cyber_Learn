@@ -21,6 +21,7 @@ const userSchema = new Schema(
     aiSettings: {
       provider: { type: String, default: '' },
       model: { type: String, default: '' },
+      fallbackModels: { type: [String], default: [] },
       baseUrl: { type: String, default: '' },
       apiKeyEnc: { type: String, default: '', select: false },
       keyHint: { type: String, default: '' },

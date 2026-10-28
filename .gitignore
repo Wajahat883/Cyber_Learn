@@ -8,3 +8,13 @@ coverage/
 backend/storage/
 .DS_Store
 .vite/
+
+# Playwright
+e2e/test-results/
+e2e/playwright-report/
+
+# MongoDB editor playgrounds
+*.mongodb.js
+
+# AI evaluation runs
+backend/eval/results/

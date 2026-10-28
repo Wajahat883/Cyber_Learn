@@ -40,9 +40,15 @@ export function useNarration(
   const opts = useRef(options);
   opts.current = options;
   const handle = useRef<NarrationHandle>({ word: null, levels: () => null, speaking: () => false });
+  // Read through a ref so a refetched (identical or edited) manifest doesn't tear down the
+  // audio element and speech; the effect only restarts for a new clock.
+  const manifestRef = useRef(manifest);
+  manifestRef.current = manifest;
+  const hasManifest = Boolean(manifest);
 
   useEffect(() => {
-    if (!clock || !manifest) return;
+    if (!clock || !manifestRef.current) return;
+    const current = () => manifestRef.current!;
     const audio = new Audio();
     audio.preload = 'auto';
     audioRef.current = audio;
@@ -54,10 +60,12 @@ export function useNarration(
     // Real waveform for stored audio (same-origin, so it can be analysed).
     let analyser: AnalyserNode | null = null;
     let bins: Uint8Array<ArrayBuffer> | null = null;
+    let audioCtx: AudioContext | null = null;
     const ensureAnalyser = () => {
-      if (analyser || typeof AudioContext === 'undefined') return;
+      if (analyser || audioCtx || typeof AudioContext === 'undefined') return;
       try {
         const ctx = new AudioContext();
+        audioCtx = ctx;
         const source = ctx.createMediaElementSource(audio);
         analyser = ctx.createAnalyser();
         analyser.fftSize = 64;
@@ -100,7 +108,7 @@ export function useNarration(
 
     const shouldHold = (slideIndex: number, elapsedMs: number) => {
       if (!opts.current.enabled) return false;
-      const slide = manifest.slides[slideIndex];
+      const slide = current().slides[slideIndex];
       if (!slide) return false;
       if (slide.narration.audioAssetId) {
         // Audio is buffering or behind: wait for it.
@@ -114,6 +122,7 @@ export function useNarration(
 
     const sync = () => {
       const { slideIndex, elapsedMs, playing, speed } = clock.getSnapshot();
+      const manifest = current();
       const slide = manifest.slides[slideIndex];
       const enabled = opts.current.enabled;
       const jumped = slideIndex !== lastSlide || Math.abs(elapsedMs - lastElapsed) > 1000;
@@ -180,8 +189,12 @@ export function useNarration(
       audio.src = '';
       stopSpeech();
       handle.current.levels = () => null;
+      // Browsers cap the number of live AudioContexts; release this one.
+      if (audioCtx && audioCtx.state !== 'closed') void audioCtx.close().catch(() => undefined);
+      audioCtx = null;
+      analyser = null;
     };
-  }, [clock, manifest]);
+  }, [clock, hasManifest]);
 
   // Muting or volume changes apply immediately.
   useEffect(() => {

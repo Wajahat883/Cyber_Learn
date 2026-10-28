@@ -5,7 +5,7 @@ import { z } from 'zod';
  * Claude speaks the OpenAI-compatible chat-completions protocol, so one adapter
  * covers them all. Base URLs are fixed per preset (only "custom" takes a URL).
  */
-export const AI_PROVIDER_IDS = ['opencode', 'openai', 'groq', 'gemini', 'anthropic', 'ollama', 'custom'] as const;
+export const AI_PROVIDER_IDS = ['opencode', 'openrouter', 'openai', 'groq', 'gemini', 'anthropic', 'ollama', 'custom'] as const;
 export type AiProviderId = (typeof AI_PROVIDER_IDS)[number];
 
 export interface AiProviderPreset {
@@ -29,6 +29,16 @@ export const AI_PROVIDER_PRESETS: AiProviderPreset[] = [
     keyUrl: 'https://opencode.ai',
     note: 'Pay-as-you-go gateway to many models. Free models only work inside OpenCode itself.',
     suggestedModels: ['deepseek-v4-pro', 'kimi-k2.6', 'glm-5.3', 'qwen3.8-max'],
+  },
+  {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    protocol: 'openai-compatible',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    needsKey: true,
+    keyUrl: 'https://openrouter.ai/keys',
+    note: 'One key for hundreds of models. Models ending in ":free" cost nothing (about 50 requests a day, 1,000 after buying $10 of credit). Add free fallback models so lessons keep generating when a limit is hit.',
+    suggestedModels: [],
   },
   {
     id: 'groq',
@@ -92,6 +102,8 @@ export const AI_PROVIDER_PRESETS: AiProviderPreset[] = [
   },
 ];
 
+export const MAX_FALLBACK_MODELS = 5;
+
 export const presetById = (id: string) => AI_PROVIDER_PRESETS.find((p) => p.id === id);
 
 export const AiSettingsInputSchema = z.object({
@@ -101,6 +113,8 @@ export const AiSettingsInputSchema = z.object({
   baseUrl: z.string().trim().max(300).default(''),
   /** Omit to keep the key that is already saved. */
   apiKey: z.string().trim().max(500).optional(),
+  /** Tried in order when the main model runs out of credits, hits a rate limit or is unavailable (same key and endpoint). */
+  fallbackModels: z.array(z.string().trim().min(1).max(120)).max(MAX_FALLBACK_MODELS).default([]),
 });
 
 export type AiSettingsInput = z.infer<typeof AiSettingsInputSchema>;

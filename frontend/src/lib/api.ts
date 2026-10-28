@@ -19,11 +19,17 @@ export class ApiError extends Error {
   }
 }
 
-function readCookie(name: string): string | undefined {
-  return document.cookie
+export function readCookie(name: string): string | undefined {
+  const raw = document.cookie
     .split('; ')
     .find((c) => c.startsWith(`${name}=`))
-    ?.split('=')[1];
+    ?.slice(name.length + 1);
+  if (raw === undefined) return undefined;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw; // malformed escape sequence: use the value as-is
+  }
 }
 
 let csrfReady: Promise<void> | null = null;

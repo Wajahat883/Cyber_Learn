@@ -38,10 +38,19 @@ export const LessonSectionSchema = z.object({
   supplementaryNotes: z.array(z.string().max(600)).max(15).default([]),
   grounding: GroundingSchema.default('mixed'),
   sourceRefs: z.array(SourceReferenceSchema).max(30).default([]),
+  /**
+   * Commands, event IDs or queries in this section that do not appear verbatim in the
+   * cited source text (set by the generator; absent on older lessons).
+   */
+  unverifiedClaims: z.array(z.string().max(300)).max(30).optional(),
+  /** Set by the server when the learner changed this section's text by hand; an incremental update never overwrites it. */
+  manuallyEdited: z.boolean().optional(),
+  /** The source passages behind this (hand-edited) section changed in an incremental update: the learner should review it. */
+  sourceChanged: z.boolean().optional(),
 });
 
 /** What the AI lesson generator must return for one planned section. */
-export const GeneratedSectionSchema = LessonSectionSchema.omit({ id: true, title: true, sourceRefs: true }).extend({
+export const GeneratedSectionSchema = LessonSectionSchema.omit({ id: true, title: true, sourceRefs: true, unverifiedClaims: true, manuallyEdited: true, sourceChanged: true }).extend({
   sourceChunks: z.array(z.number().int().nonnegative()).max(30).default([]),
 });
 

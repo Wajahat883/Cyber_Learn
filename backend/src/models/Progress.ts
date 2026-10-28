@@ -52,5 +52,11 @@ const activitySchema = new Schema(
 
 activitySchema.index({ ownerId: 1, createdAt: -1 });
 activitySchema.index({ projectId: 1, createdAt: -1 });
+/**
+ * The log would otherwise grow without bound. Old entries expire after ACTIVITY_TTL_DAYS;
+ * 400 days matches the longest look-back used by the stats (study streak).
+ */
+export const ACTIVITY_TTL_DAYS = 400;
+activitySchema.index({ createdAt: 1 }, { expireAfterSeconds: ACTIVITY_TTL_DAYS * 24 * 3600 });
 
 export const Activity = model('Activity', activitySchema);

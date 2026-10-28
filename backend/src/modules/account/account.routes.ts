@@ -1,4 +1,6 @@
-import { Router } from 'express';
+import { once } from 'node:events';
+import { Router, type Response } from 'express';
+import { usageToday } from '../../services/aiBudget.js';
 import { Types } from 'mongoose';
 import { z } from 'zod';
 import { AI_PROVIDER_PRESETS, AiSettingsInputSchema, presetById, UpdateProfileSchema, type AiSettingsInput } from '@cyberlearn/shared';
@@ -8,7 +10,7 @@ import { aiLimiter } from '../../middleware/rateLimit.js';
 import { env } from '../../config/env.js';
 import { storage } from '../../config/storage.js';
 import { clearSessionCookie, setSessionCookie } from '../../middleware/authenticate.js';
-import { authLimiter } from '../../middleware/rateLimit.js';
+import { authLimiter, exportLimiter } from '../../middleware/rateLimit.js';
 import { validate } from '../../middleware/validate.js';
 import {
   Activity,
@@ -33,6 +35,7 @@ import { deleteProjectData } from '../../services/projectData.js';
 import { decryptSecret, encryptSecret, verifyPassword } from '../../utils/crypto.js';
 import { AppError, badRequest } from '../../utils/errors.js';
 import { userId } from '../../utils/http.js';
+import { logger } from '../../utils/logger.js';
 import { publicUser } from '../auth/auth.service.js';
 
 export const accountRouter = Router();
@@ -85,43 +88,63 @@ accountRouter.post('/account/logout-all', async (req, res) => {
   res.status(204).end();
 });
 
-/** Full data export / backup of everything the user owns (spec 4.14, 17). */
-accountRouter.get('/account/export', authLimiter, async (req, res) => {
+/** Writes to the response, waiting for the socket to drain so large backups never pile up in memory. */
+async function write(res: Response, chunk: string) {
+  if (!res.write(chunk)) await once(res, 'drain');
+}
+
+/**
+ * Full data export / backup of everything the user owns (spec 4.14, 17).
+ * Streamed collection by collection from database cursors: memory stays bounded
+ * by one document (or one source's text) no matter how large the account is.
+ */
+accountRouter.get('/account/export', authLimiter, exportLimiter, async (req, res) => {
   const ownerId = userId(req);
   const filter = { ownerId };
-  const [user, subjects, learningPaths, projects, sources, chunks, lessons, presentations, flashcards, flashcardReviews, quizzes, quizAttempts, progress] = await Promise.all([
-    User.findById(ownerId).lean(),
-    Subject.find(filter).lean(),
-    LearningPath.find(filter).lean(),
-    Project.find(filter).lean(),
-    Source.find(filter).lean(),
-    SourceChunk.find(filter).sort({ sourceId: 1, index: 1 }).lean(),
-    Lesson.find(filter).lean(),
-    Presentation.find(filter).lean(),
-    Flashcard.find(filter).lean(),
-    FlashcardReview.find(filter).lean(),
-    Quiz.find(filter).lean(),
-    QuizAttempt.find(filter).lean(),
-    Progress.find(filter).lean(),
-  ]);
-  const backup = {
-    format: 'cyberlearn-backup',
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    user: user ? publicUser(user) : null,
-    subjects,
-    learningPaths,
-    projects,
-    sources: sources.map((s) => ({ ...s, extractedText: chunks.filter((c) => String(c.sourceId) === String(s._id)).map((c) => c.text) })),
-    lessons,
-    presentations,
-    flashcards,
-    flashcardReviews,
-    quizzes,
-    quizAttempts,
-    progress,
-  };
-  res.attachment(`cyberlearn-backup-${new Date().toISOString().slice(0, 10)}.json`).type('application/json').send(JSON.stringify(backup, null, 2));
+  const user = await User.findById(ownerId).lean();
+  res.attachment(`cyberlearn-backup-${new Date().toISOString().slice(0, 10)}.json`).type('application/json');
+
+  const collections: [string, () => AsyncIterable<unknown>][] = [
+    ['subjects', () => Subject.find(filter).lean().cursor()],
+    ['learningPaths', () => LearningPath.find(filter).lean().cursor()],
+    ['projects', () => Project.find(filter).lean().cursor()],
+    [
+      'sources',
+      async function* () {
+        // One indexed query per source (sourceId, index): O(S + C), never O(S x C).
+        for await (const s of Source.find(filter).sort({ _id: 1 }).lean().cursor()) {
+          const chunks = await SourceChunk.find({ ownerId, sourceId: s._id }).sort({ index: 1 }).select('text').lean();
+          yield { ...s, extractedText: chunks.map((c) => c.text) };
+        }
+      },
+    ],
+    ['lessons', () => Lesson.find(filter).lean().cursor()],
+    ['presentations', () => Presentation.find(filter).lean().cursor()],
+    ['flashcards', () => Flashcard.find(filter).lean().cursor()],
+    ['flashcardReviews', () => FlashcardReview.find(filter).lean().cursor()],
+    ['quizzes', () => Quiz.find(filter).lean().cursor()],
+    ['quizAttempts', () => QuizAttempt.find(filter).lean().cursor()],
+    ['progress', () => Progress.find(filter).lean().cursor()],
+  ];
+
+  try {
+    const head = { format: 'cyberlearn-backup', version: 1, exportedAt: new Date().toISOString(), user: user ? publicUser(user) : null };
+    await write(res, JSON.stringify(head).slice(0, -1));
+    for (const [key, rows] of collections) {
+      await write(res, `,\n${JSON.stringify(key)}:[`);
+      let first = true;
+      for await (const row of rows()) {
+        await write(res, (first ? '\n' : ',\n') + JSON.stringify(row));
+        first = false;
+      }
+      await write(res, ']');
+    }
+    res.end('}\n');
+  } catch (err) {
+    // Headers are already sent: abort the download rather than deliver a truncated file as complete.
+    logger.error({ err }, 'Account export failed');
+    res.destroy(err as Error);
+  }
 });
 
 const DeleteSchema = z.object({ password: z.string().min(1).max(200), confirm: z.literal('DELETE') });
@@ -158,19 +181,32 @@ accountRouter.get('/account/ai', async (req, res) => {
   const user = await User.findById(userId(req)).select('aiSettings').lean();
   const s = user?.aiSettings;
   res.json({
-    settings: s?.provider ? { provider: s.provider, model: s.model, baseUrl: s.provider === 'custom' ? s.baseUrl : '', hasKey: Boolean(s.keyHint), keyHint: s.keyHint, updatedAt: s.updatedAt } : null,
+    settings: s?.provider ? { provider: s.provider, model: s.model, fallbackModels: s.fallbackModels ?? [], baseUrl: s.provider === 'custom' ? s.baseUrl : '', hasKey: Boolean(s.keyHint), keyHint: s.keyHint, updatedAt: s.updatedAt } : null,
     serverDefault: { provider: env.AI_TEXT_PROVIDER, model: env.AI_TEXT_PROVIDER === 'mock' ? '' : env.AI_TEXT_MODEL },
     presets: AI_PROVIDER_PRESETS,
+    usage: await usageToday(userId(req)),
   });
 });
 
-/** Builds a provider config from a request, falling back to the saved key when the provider is unchanged. */
+const sameUrl = (a: string, b: string) => a.trim().replace(/\/+$/, '').toLowerCase() === b.trim().replace(/\/+$/, '').toLowerCase();
+
+/**
+ * Builds a provider config from a request. The saved key is reused only when the
+ * provider AND its endpoint are unchanged: a stored key is never sent to a new
+ * base URL without the user re-entering it.
+ */
 async function configFrom(ownerId: string, input: AiSettingsInput): Promise<ProviderConfig> {
   const saved = (await User.findById(ownerId).select('+aiSettings.apiKeyEnc').lean())?.aiSettings;
+  const savedUrl = saved?.provider === 'custom' ? (saved.baseUrl ?? '') : '';
+  const requestedUrl = input.baseUrl || savedUrl;
+  const sameEndpoint = saved?.provider === input.provider && (input.provider !== 'custom' || sameUrl(requestedUrl, savedUrl));
   let apiKey = input.apiKey ?? '';
-  if (!apiKey && saved?.provider === input.provider && saved.apiKeyEnc) apiKey = decryptSecret(saved.apiKeyEnc) ?? '';
-  const baseUrl = await resolveBaseUrl(input.provider, input.baseUrl || (saved?.provider === 'custom' ? saved.baseUrl : ''));
-  return { provider: input.provider, model: input.model, baseUrl, apiKey };
+  if (!apiKey && sameEndpoint && saved?.apiKeyEnc) apiKey = decryptSecret(saved.apiKeyEnc) ?? '';
+  if (!apiKey && !sameEndpoint && saved?.apiKeyEnc && input.provider === 'custom' && saved.provider === 'custom') {
+    throw badRequest('The endpoint URL changed: re-enter the API key for the new endpoint');
+  }
+  const baseUrl = await resolveBaseUrl(input.provider, requestedUrl);
+  return { provider: input.provider, model: input.model, baseUrl, apiKey, fallbackModels: input.fallbackModels };
 }
 
 function providerError(err: unknown): never {
@@ -221,6 +257,7 @@ accountRouter.put('/account/ai', validate(AiSettingsInputSchema), async (req, re
       $set: {
         'aiSettings.provider': cfg.provider,
         'aiSettings.model': cfg.model,
+        'aiSettings.fallbackModels': cfg.fallbackModels ?? [],
         'aiSettings.baseUrl': cfg.provider === 'custom' ? cfg.baseUrl : '',
         'aiSettings.apiKeyEnc': cfg.apiKey ? encryptSecret(cfg.apiKey) : '',
         'aiSettings.keyHint': hint(cfg.apiKey),
@@ -233,6 +270,6 @@ accountRouter.put('/account/ai', validate(AiSettingsInputSchema), async (req, re
 
 /** Back to the server default from .env. The stored key is deleted. */
 accountRouter.delete('/account/ai', async (req, res) => {
-  await User.updateOne({ _id: userId(req) }, { $set: { aiSettings: { provider: '', model: '', baseUrl: '', apiKeyEnc: '', keyHint: '', updatedAt: new Date() } } });
+  await User.updateOne({ _id: userId(req) }, { $set: { aiSettings: { provider: '', model: '', fallbackModels: [], baseUrl: '', apiKeyEnc: '', keyHint: '', updatedAt: new Date() } } });
   res.status(204).end();
 });

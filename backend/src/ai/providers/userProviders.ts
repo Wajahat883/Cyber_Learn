@@ -1,10 +1,11 @@
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import { metered } from '../../services/aiBudget.js';
 import { AI_PROVIDER_PRESETS, presetById, type AiProviderId } from '@cyberlearn/shared';
 import { env } from '../../config/env.js';
 import { User } from '../../models/index.js';
 import { decryptSecret } from '../../utils/crypto.js';
 import { badRequest } from '../../utils/errors.js';
+import { isPublicAddress, markUntrustedEndpoint, providerFetch } from '../../utils/safeFetch.js';
 import { AiProviderError, type TextGenerationProvider } from '../types.js';
 import { AnthropicTextProvider } from './anthropic.js';
 import { textProvider } from './index.js';
@@ -15,14 +16,14 @@ export interface ProviderConfig {
   model: string;
   baseUrl: string;
   apiKey: string;
+  fallbackModels?: string[];
 }
-
-const PRIVATE_V4 = [/^10\./, /^127\./, /^0\./, /^169\.254\./, /^192\.168\./, /^172\.(1[6-9]|2\d|3[01])\./, /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./];
-const isPrivate = (ip: string) => (isIP(ip) === 6 ? /^(::1|fc|fd|fe80|::ffff:(10|127|192\.168|169\.254)\.)/i.test(ip) || ip === '::' : PRIVATE_V4.some((r) => r.test(ip)));
 
 /**
  * "Custom" endpoints must be public HTTPS, so a user cannot make the server
- * call internal services (SSRF). Presets have fixed, known URLs.
+ * call internal services (SSRF). Presets have fixed, known URLs. This check
+ * gives a friendly error up front; the real enforcement happens at connect
+ * time in utils/safeFetch.ts (pinned DNS answer, no redirects).
  */
 async function assertPublicHttps(url: string) {
   let parsed: URL;
@@ -32,18 +33,23 @@ async function assertPublicHttps(url: string) {
     throw badRequest('Enter a valid URL, e.g. https://api.example.com/v1');
   }
   if (parsed.protocol !== 'https:') throw badRequest('Custom endpoints must use https://');
-  const addresses = await lookup(parsed.hostname, { all: true }).catch(() => []);
+  const addresses = await lookup(parsed.hostname.replace(/^\[|\]$/g, ''), { all: true }).catch(() => []);
   if (!addresses.length) throw badRequest('That host name could not be resolved');
-  if (addresses.some((a) => isPrivate(a.address))) throw badRequest('Custom endpoints must be public internet addresses');
+  if (addresses.some((a) => !isPublicAddress(a.address))) throw badRequest('Custom endpoints must be public internet addresses');
 }
 
 export async function resolveBaseUrl(provider: AiProviderId, customUrl: string): Promise<string> {
   if (provider === 'ollama') return env.OLLAMA_BASE_URL;
+  // Ollama is the operator's own endpoint from .env (may be localhost) and stays trusted.
   if (provider === 'custom') {
     await assertPublicHttps(customUrl);
-    return customUrl.replace(/\/+$/, '');
+    const base = customUrl.replace(/\/+$/, '');
+    markUntrustedEndpoint(base);
+    return base;
   }
-  return presetById(provider)?.baseUrl ?? '';
+  const base = presetById(provider)?.baseUrl ?? '';
+  markUntrustedEndpoint(base);
+  return base;
 }
 
 export function buildProvider(cfg: ProviderConfig): TextGenerationProvider {
@@ -52,7 +58,7 @@ export function buildProvider(cfg: ProviderConfig): TextGenerationProvider {
   if (preset.needsKey && !cfg.apiKey) throw badRequest(`${preset.label} needs an API key`);
   if (preset.protocol === 'anthropic') return new AnthropicTextProvider({ apiKey: cfg.apiKey, model: cfg.model || undefined });
   if (!cfg.model) throw badRequest('Choose a model');
-  return new OpenAICompatibleTextProvider(cfg.baseUrl, cfg.apiKey, cfg.model);
+  return new OpenAICompatibleTextProvider(cfg.baseUrl, cfg.apiKey, cfg.model, cfg.fallbackModels);
 }
 
 /** Lists model ids the credentials can use, for the Settings model picker. */
@@ -61,7 +67,7 @@ export async function listModels(cfg: ProviderConfig): Promise<string[]> {
   if (preset?.protocol === 'anthropic') return new AnthropicTextProvider({ apiKey: cfg.apiKey }).listModels();
   let res: Response;
   try {
-    res = await fetch(`${cfg.baseUrl}/models`, { headers: cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {}, signal: AbortSignal.timeout(15_000) });
+    res = await providerFetch(`${cfg.baseUrl}/models`, { headers: cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {}, signal: AbortSignal.timeout(15_000) });
   } catch {
     throw new AiProviderError(cfg.provider === 'ollama' ? `Ollama is not reachable at ${cfg.baseUrl}. Is it running?` : 'The provider could not be reached', true, 'AI_UNREACHABLE');
   }
@@ -78,6 +84,10 @@ const cache = new Map<string, TextGenerationProvider>();
  * the server default from .env (or the offline provider).
  */
 export async function textProviderFor(ownerId: string): Promise<TextGenerationProvider> {
+  return metered(await resolveTextProvider(ownerId), ownerId);
+}
+
+async function resolveTextProvider(ownerId: string): Promise<TextGenerationProvider> {
   const user = await User.findById(ownerId).select('+aiSettings.apiKeyEnc').lean();
   const s = user?.aiSettings;
   if (!s?.provider) return textProvider();
@@ -87,7 +97,7 @@ export async function textProviderFor(ownerId: string): Promise<TextGenerationPr
   const apiKey = s.apiKeyEnc ? decryptSecret(s.apiKeyEnc) : '';
   if (apiKey === null) throw new AiProviderError('Your saved API key can no longer be read. Re-enter it in Settings.', false, 'AI_KEY_UNREADABLE');
   const providerId = s.provider as AiProviderId;
-  const provider = buildProvider({ provider: providerId, model: s.model, baseUrl: await resolveBaseUrl(providerId, s.baseUrl), apiKey });
+  const provider = buildProvider({ provider: providerId, model: s.model, baseUrl: await resolveBaseUrl(providerId, s.baseUrl), apiKey, fallbackModels: s.fallbackModels ?? [] });
   for (const k of cache.keys()) if (k.startsWith(`${ownerId}:`)) cache.delete(k);
   cache.set(key, provider);
   return provider;

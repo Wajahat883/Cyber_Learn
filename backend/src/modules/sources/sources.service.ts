@@ -2,9 +2,35 @@ import { Types } from 'mongoose';
 import { Project, Source, SourceChunk } from '../../models/index.js';
 import { chunkText, extractHeadings, normalizeText, type TextChunk } from '../../services/text.js';
 import { storage } from '../../config/storage.js';
-import { extractDocument, validateUpload } from '../../services/extraction.js';
+import { extractDocument, ExtractionError, validateUpload } from '../../services/extraction.js';
 import { sha256 } from '../../utils/crypto.js';
-import { badRequest } from '../../utils/errors.js';
+import { badRequest, conflict } from '../../utils/errors.js';
+import { logger } from '../../utils/logger.js';
+
+/** An unfinished source older than this is considered abandoned (its request crashed) and may be replaced. */
+const STUCK_PROCESSING_MS = 5 * 60_000;
+
+/**
+ * Duplicate detection. Only a successfully extracted source counts as a duplicate;
+ * a failed (or abandoned) earlier attempt with the same content is removed, with
+ * its stored file, so the material can be uploaded again.
+ */
+async function findDuplicate(ownerId: string, projectId: string, contentHash: string) {
+  const existing = await Source.find({ ownerId, projectId, contentHash });
+  let duplicate: (typeof existing)[number] | null = null;
+  for (const source of existing) {
+    if (source.extractionStatus === 'completed') {
+      duplicate ??= source;
+      continue;
+    }
+    const age = Date.now() - new Date(source.get('createdAt') as Date).getTime();
+    if (source.extractionStatus === 'processing' && age < STUCK_PROCESSING_MS) throw conflict('This file is already being processed');
+    if (source.storageKey) await storage.delete(source.storageKey).catch((err) => logger.warn({ err, key: source.storageKey }, 'Failed to delete stored file of a failed source'));
+    await SourceChunk.deleteMany({ ownerId, sourceId: source._id });
+    await source.deleteOne();
+  }
+  return duplicate;
+}
 
 export interface ExtractedDocument {
   /** One entry per page for paginated formats, a single entry otherwise. */
@@ -24,7 +50,7 @@ export function buildChunks(doc: ExtractedDocument): { chunks: TextChunk[]; text
 /** Persists chunks for a source and marks it completed. */
 export async function saveChunks(sourceId: Types.ObjectId, ownerId: string, projectId: unknown, doc: ExtractedDocument) {
   const { chunks, text } = buildChunks(doc);
-  if (!chunks.length) throw new Error('No readable text was found in this source');
+  if (!chunks.length) throw new ExtractionError('No readable text was found in this source');
   await SourceChunk.deleteMany({ sourceId });
   await SourceChunk.insertMany(chunks.map((c) => ({ ...c, ownerId, projectId, sourceId })));
   await Source.updateOne(
@@ -50,7 +76,7 @@ export async function createTextSource(input: { ownerId: string; projectId: stri
   const normalized = normalizeText(input.text);
   const contentHash = sha256(normalized);
   // Re-submitting identical material returns the existing source instead of processing it twice.
-  const existing = await Source.findOne({ ownerId: input.ownerId, projectId: input.projectId, contentHash });
+  const existing = await findDuplicate(input.ownerId, input.projectId, contentHash);
   if (existing) return { source: existing, duplicate: true };
 
   const source = await Source.create({
@@ -90,7 +116,7 @@ const safeName = (name: string) =>
 export async function createUploadedSource(input: { ownerId: string; projectId: string; filename: string; buffer: Buffer; title?: string }) {
   const meta = await validateUpload(input.filename, input.buffer);
   const contentHash = sha256(input.buffer);
-  const existing = await Source.findOne({ ownerId: input.ownerId, projectId: input.projectId, contentHash });
+  const existing = await findDuplicate(input.ownerId, input.projectId, contentHash);
   if (existing) return { source: existing, duplicate: true };
 
   const source = await Source.create({
@@ -113,7 +139,9 @@ export async function createUploadedSource(input: { ownerId: string; projectId: 
     const pages = await extractDocument(meta.kind, input.buffer);
     await saveChunks(source._id, input.ownerId, input.projectId, { pages });
   } catch (err) {
-    const message = (err as Error).message || 'Text extraction failed';
+    // Parser internals (stack-ish messages, library names) are logged, not shown.
+    const message = err instanceof ExtractionError ? err.message : 'This file could not be read. It may be damaged or in an unsupported format.';
+    if (!(err instanceof ExtractionError)) logger.warn({ err, sourceId: String(source._id), kind: meta.kind }, 'Document extraction failed');
     await Source.updateOne({ _id: source._id }, { $set: { extractionStatus: 'failed', extractionError: message.slice(0, 300) } });
     throw badRequest(message);
   }

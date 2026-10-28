@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { Types } from 'mongoose';
 import {
   DiagramSpecSchema,
   GenerationPreferencesSchema,
@@ -36,7 +37,7 @@ async function snapshot(lesson: LessonDoc, reason: string, force = false) {
 }
 
 function aiError(err: unknown): never {
-  if (err instanceof AiProviderError) throw new AppError(err.retryable ? 503 : 502, err.code, err.message);
+  if (err instanceof AiProviderError) throw new AppError(err.code === 'AI_DAILY_LIMIT' ? 429 : err.retryable ? 503 : 502, err.code, err.message);
   if (err instanceof AiOutputError) throw new AppError(502, 'AI_OUTPUT_INVALID', err.message);
   throw err;
 }
@@ -44,7 +45,11 @@ function aiError(err: unknown): never {
 lessonsRouter.get('/lessons', async (req, res) => {
   const ownerId = userId(req);
   const lessons = await Lesson.find({ ownerId }).sort({ updatedAt: -1 }).limit(200).select('title subject projectId generationStatus updatedAt sections.id diagrams.id').lean();
-  const presentations = await Presentation.find({ ownerId }).select('lessonId _id version manifest.slides.id').lean();
+  // Only the presentations of the listed lessons, and only a slide count: the manifests themselves stay in the database.
+  const presentations = await Presentation.aggregate<{ _id: unknown; lessonId: unknown; version: number; slideCount: number }>([
+    { $match: { ownerId: new Types.ObjectId(ownerId), lessonId: { $in: lessons.map((l) => l._id) } } },
+    { $project: { lessonId: 1, version: 1, slideCount: { $size: { $ifNull: ['$manifest.slides', []] } } } },
+  ]);
   const byLesson = new Map(presentations.map((p) => [String(p.lessonId), p]));
   res.json({
     lessons: lessons.map((l) => {
@@ -58,7 +63,7 @@ lessonsRouter.get('/lessons', async (req, res) => {
         updatedAt: l.updatedAt,
         sectionCount: (l.sections as unknown[]).length,
         diagramCount: (l.diagrams as unknown[]).length,
-        presentation: p ? { _id: p._id, version: p.version, slideCount: (p.manifest as PresentationManifest).slides.length } : null,
+        presentation: p ? { _id: p._id, version: p.version, slideCount: p.slideCount } : null,
       };
     }),
   });
@@ -168,6 +173,25 @@ lessonsRouter.post('/lessons/:id/sections/:sectionId/examples', aiLimiter, valid
   });
   await lesson.save();
   res.json({ lesson, examples });
+});
+
+/** The source passages a section was written from, for the side-by-side "compare with your notes" view. */
+lessonsRouter.get('/lessons/:id/sections/:sectionId/source', validateIds('id'), async (req, res) => {
+  const ownerId = userId(req);
+  const lesson = (await findOwned(Lesson, param(req, 'id'), ownerId, 'Lesson')) as LessonDoc;
+  const section = (lesson.sections as LessonSection[]).find((s) => s.id === param(req, 'sectionId'));
+  if (!section) throw notFound('Section');
+  const chunks = await loadChunks(ownerId, lesson.sourceIds);
+  const byIndex = new Map(chunks.map((c) => [c.index, c]));
+  const passages = [...new Set(section.sourceRefs.map((r) => r.chunkIndex))]
+    .sort((a, b) => a - b)
+    .slice(0, 12)
+    .flatMap((index) => {
+      const chunk = byIndex.get(index);
+      if (!chunk) return [];
+      return [{ chunkIndex: index, heading: chunk.heading ?? '', page: chunk.page ?? null, text: chunk.text, excerpts: section.sourceRefs.filter((r) => r.chunkIndex === index).map((r) => r.excerpt) }];
+    });
+  res.json({ passages });
 });
 
 /** Edit a diagram (labels, nodes, edges). The presentation copy is updated and its events re-validated. */

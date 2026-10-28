@@ -20,7 +20,10 @@ export async function answerFromNotes(provider: TextGenerationProvider, ctx: Ans
   return provider.generateStructured({
     task: 'answer',
     instructions: ANSWER_INSTRUCTIONS(ctx.language),
-    content: `Question: ${ctx.question}\n\nNotes:\n${renderChunks(ctx.chunks)}`,
+    // The learner's question sits outside the untrusted <source_material> wrapper, so text in
+    // the notes cannot pose as (or replace) the question.
+    prompt: `<question>\n${ctx.question.replace(/<\s*\/?\s*question[^>]*>/gi, '')}\n</question>`,
+    content: renderChunks(ctx.chunks),
     schema: AnswerSchema,
     context: ctx,
   });

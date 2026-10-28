@@ -7,14 +7,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Field';
 import { Alert, PageLoader } from '../../components/ui/Feedback';
 import { timeAgo } from '../../utils/format';
-import type { Presentation } from '../../types/models';
-
-interface VersionRow {
-  version: number;
-  label: string;
-  createdAt: string;
-  slideCount: number;
-}
+import type { Presentation, PresentationVersionRow } from '../../types/models';
 
 /** Presentation version history: save named versions and restore earlier ones. */
 export function VersionsButton({ presentation, onRestored }: { presentation: Presentation; onRestored: () => void }) {
@@ -24,7 +17,7 @@ export function VersionsButton({ presentation, onRestored }: { presentation: Pre
   const key = ['presentation-versions', presentation._id];
   const { data, isLoading } = useQuery({
     queryKey: key,
-    queryFn: async () => (await api.get<{ versions: VersionRow[] }>(`/presentations/${presentation._id}/versions`)).versions,
+    queryFn: async () => (await api.get<{ versions: PresentationVersionRow[] }>(`/presentations/${presentation._id}/versions`)).versions,
     enabled: open,
   });
   const save = useMutation({

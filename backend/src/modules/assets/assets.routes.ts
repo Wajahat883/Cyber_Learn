@@ -22,7 +22,7 @@ assetsRouter.get('/assets', async (req, res) => {
   const filter: Record<string, unknown> = { ownerId };
   if (typeof req.query.lessonId === 'string' && req.query.lessonId.length === 24) filter.lessonId = req.query.lessonId;
   if (typeof req.query.type === 'string') filter.assetType = req.query.type;
-  const assets = await Asset.find(filter).sort({ createdAt: -1 }).limit(200).select('-storageKey').lean();
+  const assets = await Asset.find(filter).sort({ createdAt: -1 }).limit(200).lean();
 
   // Where each image is used in the presentation (spec 4.10 "Usage within slides").
   const lessonIds = [...new Set(assets.map((a) => String(a.lessonId)).filter((x) => x !== 'null'))];

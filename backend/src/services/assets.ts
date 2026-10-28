@@ -35,7 +35,7 @@ export async function storeAsset(input: {
   const id = input.assetId ?? String(new Types.ObjectId());
   const key = storageKey(input.ownerId, input.projectId, `${id}-${Date.now().toString(36)}`, input.mimeType);
   await storage.put(key, input.body, input.mimeType);
-  const existing = input.assetId ? await Asset.findById(id) : null;
+  const existing = input.assetId ? await Asset.findById(id).select('+storageKey') : null;
   const previousKey = existing?.storageKey;
   const doc = existing ?? new Asset({ _id: id, ownerId: input.ownerId, projectId: input.projectId ?? null, lessonId: input.lessonId ?? null, assetType: input.assetType });
   doc.set({

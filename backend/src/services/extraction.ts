@@ -5,7 +5,9 @@ import { Worker } from 'node:worker_threads';
 import { fileTypeFromBuffer } from 'file-type';
 import { ALLOWED_UPLOAD_EXTENSIONS } from '@cyberlearn/shared';
 import { badRequest } from '../utils/errors.js';
-import { parseDocument, type DocumentKind } from './extractParsers.js';
+import { ExtractionError, parseDocument, type DocumentKind } from './extractParsers.js';
+
+export { ExtractionError };
 
 const EXTRACTION_TIMEOUT_MS = 60_000;
 
@@ -65,7 +67,7 @@ export async function extractDocument(kind: DocumentKind, buffer: Buffer): Promi
     // Test runner fallback: same parser, in-process, still time-limited.
     return Promise.race([
       parseDocument(kind, new Uint8Array(buffer)),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Extraction took too long')), EXTRACTION_TIMEOUT_MS)),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new ExtractionError('Extraction took too long')), EXTRACTION_TIMEOUT_MS).unref?.()),
     ]);
   }
   return new Promise((resolve, reject) => {
@@ -75,17 +77,18 @@ export async function extractDocument(kind: DocumentKind, buffer: Buffer): Promi
     });
     const timer = setTimeout(() => {
       void worker.terminate();
-      reject(new Error('Extraction took too long and was stopped'));
+      reject(new ExtractionError('Extraction took too long and was stopped'));
     }, EXTRACTION_TIMEOUT_MS);
-    worker.once('message', (msg: { ok: boolean; pages?: string[]; error?: string }) => {
+    worker.once('message', (msg: { ok: boolean; pages?: string[]; error?: string; userFacing?: boolean }) => {
       clearTimeout(timer);
       void worker.terminate();
       if (msg.ok) resolve(msg.pages ?? []);
-      else reject(new Error(msg.error ?? 'Extraction failed'));
+      // Raw parser messages stay internal (logged by the caller), only vetted ones reach the user.
+      else reject(msg.userFacing ? new ExtractionError(msg.error ?? 'Extraction failed') : new Error(msg.error ?? 'Extraction failed'));
     });
     worker.once('error', (err) => {
       clearTimeout(timer);
-      reject(new Error(err.message.includes('memory') ? 'The document is too complex to process' : 'Extraction failed'));
+      reject(err.message.includes('memory') ? new ExtractionError('The document is too complex to process') : new Error(`Extraction worker error: ${err.message}`));
     });
   });
 }

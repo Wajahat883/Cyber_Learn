@@ -26,6 +26,7 @@ import { revisionRouter } from './modules/revision/revision.routes.js';
 import { sourcesRouter } from './modules/sources/sources.routes.js';
 import { subjectsRouter } from './modules/subjects/subjects.routes.js';
 import { logger } from './utils/logger.js';
+import { httpMetrics, metricsHandler } from './services/metrics.js';
 import './jobs/processors.js';
 
 export function createApp() {
@@ -42,7 +43,7 @@ export function createApp() {
         res.setHeader('x-request-id', id);
         return id;
       },
-      autoLogging: { ignore: (req) => req.url === '/api/v1/health' },
+      autoLogging: { ignore: (req) => req.url === '/api/v1/health' || req.url === '/api/v1/metrics' },
       serializers: { req: (req) => ({ id: req.id, method: req.method, url: req.url }) },
     }),
   );
@@ -52,6 +53,8 @@ export function createApp() {
   app.use(cookieParser());
 
   const api = Router();
+  api.use(httpMetrics);
+  api.get('/metrics', metricsHandler);
   api.get('/health', async (_req, res) => {
     const database = mongoose.connection.readyState === 1 ? 'up' : 'down';
     const jobs = await queueHealth().catch(() => ({ driver: 'unavailable' }));

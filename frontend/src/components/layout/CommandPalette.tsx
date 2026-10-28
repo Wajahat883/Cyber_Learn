@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
 import { BookOpen, CornerDownLeft, FolderKanban, GraduationCap, Home, Layers, MessageSquareText, MonitorPlay, Network, Plus, Search, Settings, TrendingUp } from 'lucide-react';
-import { api } from '../../lib/api';
 import { cn } from '../../lib/cn';
+import { useLessons } from '../../features/lessons/useLesson';
 
 interface Item {
   id: string;
@@ -14,13 +13,6 @@ interface Item {
   run: () => void;
 }
 
-interface LessonRow {
-  _id: string;
-  title: string;
-  subject: string;
-  presentation: { _id: string } | null;
-}
-
 /** Ctrl/⌘+K: jump to any page or lesson, or start an action, from anywhere. */
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
@@ -28,24 +20,31 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  const { data: lessons } = useQuery({
-    queryKey: ['lessons'],
-    queryFn: async () => (await api.get<{ lessons: LessonRow[] }>('/lessons')).lessons,
-    enabled: open,
-  });
+  const baseId = useId();
+  const listId = `${baseId}-list`;
+  const optionId = (id: string) => `${baseId}-opt-${id}`;
+  const { data: lessons } = useLessons({ enabled: open });
 
+  // Focus the search on open and give focus back to whatever opened the palette on close.
   useEffect(() => {
-    if (open) {
-      setQuery('');
-      setActive(0);
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
+    if (!open) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setQuery('');
+    setActive(0);
+    const frame = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => {
+      cancelAnimationFrame(frame);
+      if (previous?.isConnected) previous.focus();
+    };
   }, [open]);
 
-  const go = (to: string) => () => {
-    navigate(to);
-    onClose();
-  };
+  const go = useCallback(
+    (to: string) => () => {
+      navigate(to);
+      onClose();
+    },
+    [navigate, onClose],
+  );
 
   const items = useMemo<Item[]>(() => {
     const q = query.trim().toLowerCase();
@@ -75,20 +74,42 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       );
     }
     return result;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, lessons]);
+  }, [query, lessons, go]);
+
+  // Consecutive items of one group render under one labelled header.
+  const groups = useMemo(() => {
+    const out: { name: string; items: { item: Item; index: number }[] }[] = [];
+    items.forEach((item, index) => {
+      const last = out[out.length - 1];
+      if (last && last.name === item.group) last.items.push({ item, index });
+      else out.push({ name: item.group, items: [{ item, index }] });
+    });
+    return out;
+  }, [items]);
 
   useEffect(() => setActive(0), [query]);
   useEffect(() => {
-    listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' });
+    listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView?.({ block: 'nearest' });
   }, [active]);
 
   if (!open) return null;
-  let lastGroup = '';
+  const activeItem = items[active];
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-center px-4 pt-[12vh]" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" aria-hidden />
-      <div role="dialog" aria-modal="true" aria-label="Command palette" className="relative w-full max-w-xl rounded-2xl border border-border bg-surface shadow-pop overflow-hidden">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+        className="relative w-full max-w-xl rounded-2xl border border-border bg-surface shadow-pop overflow-hidden"
+        onKeyDown={(e) => {
+          // Focus trap: the search box is the only focusable element; options are reached with the arrow keys.
+          if (e.key === 'Tab') {
+            e.preventDefault();
+            inputRef.current?.focus();
+          }
+        }}
+      >
         <div className="flex items-center gap-3 px-4 border-b border-border">
           <Search className="h-4 w-4 text-muted shrink-0" />
           <input
@@ -102,47 +123,69 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 setActive((a) => Math.max(a - 1, 0));
+              } else if (e.key === 'Home' && e.ctrlKey) {
+                e.preventDefault();
+                setActive(0);
+              } else if (e.key === 'End' && e.ctrlKey) {
+                e.preventDefault();
+                setActive(Math.max(0, items.length - 1));
               } else if (e.key === 'Enter') {
                 e.preventDefault();
-                items[active]?.run();
-              } else if (e.key === 'Escape') onClose();
+                activeItem?.run();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                onClose();
+              }
             }}
             placeholder="Search lessons, pages and actions…"
             aria-label="Command search"
             role="combobox"
-            aria-expanded="true"
-            aria-controls="command-list"
-            aria-activedescendant={items[active] ? `cmd-${items[active].id}` : undefined}
+            aria-autocomplete="list"
+            aria-expanded={items.length > 0}
+            aria-controls={listId}
+            aria-activedescendant={activeItem ? optionId(activeItem.id) : undefined}
             className="h-14 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted"
           />
           <kbd className="text-[11px] text-muted border border-border rounded px-1.5 py-0.5">Esc</kbd>
         </div>
-        <ul ref={listRef} id="command-list" role="listbox" className="max-h-[52vh] overflow-y-auto p-2">
-          {items.length === 0 && <li className="px-3 py-8 text-center text-sm text-muted">No matches</li>}
-          {items.map((item, i) => {
-            const header = item.group !== lastGroup ? item.group : null;
-            lastGroup = item.group;
+        <ul ref={listRef} id={listId} role="listbox" aria-label="Results" className="max-h-[52vh] overflow-y-auto p-2">
+          {groups.map((group, g) => {
+            const headerId = `${baseId}-group-${g}`;
             return (
-              <li key={item.id} role="presentation">
-                {header && <p className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">{header}</p>}
-                <button
-                  id={`cmd-${item.id}`}
-                  role="option"
-                  aria-selected={i === active}
-                  data-index={i}
-                  onMouseMove={() => setActive(i)}
-                  onClick={item.run}
-                  className={cn('w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm [&_svg]:h-4 [&_svg]:w-4', i === active ? 'bg-primary-soft text-text' : 'text-text/90')}
-                >
-                  <span className={i === active ? 'text-primary' : 'text-muted'}>{item.icon}</span>
-                  <span className="flex-1 truncate">{item.label}</span>
-                  {item.hint && <span className="text-xs text-muted truncate max-w-32">{item.hint}</span>}
-                  {i === active && <CornerDownLeft className="text-muted" />}
-                </button>
+              <li key={`${group.name}-${g}`} role="group" aria-labelledby={headerId}>
+                <p id={headerId} role="presentation" className="px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                  {group.name}
+                </p>
+                <ul role="none">
+                  {group.items.map(({ item, index }) => (
+                    <li
+                      key={item.id}
+                      id={optionId(item.id)}
+                      role="option"
+                      aria-selected={index === active}
+                      data-index={index}
+                      onMouseMove={() => setActive(index)}
+                      // Keep focus in the search box so typing and arrow keys keep working.
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={item.run}
+                      className={cn('w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm cursor-pointer [&_svg]:h-4 [&_svg]:w-4', index === active ? 'bg-primary-soft text-text' : 'text-text/90')}
+                    >
+                      <span className={index === active ? 'text-primary' : 'text-muted'}>{item.icon}</span>
+                      <span className="flex-1 truncate">{item.label}</span>
+                      {item.hint && <span className="text-xs text-muted truncate max-w-32">{item.hint}</span>}
+                      {index === active && <CornerDownLeft className="text-muted" aria-hidden />}
+                    </li>
+                  ))}
+                </ul>
               </li>
             );
           })}
         </ul>
+        {items.length === 0 && (
+          <p className="px-3 pb-8 pt-6 text-center text-sm text-muted" role="status">
+            No matches
+          </p>
+        )}
       </div>
     </div>
   );

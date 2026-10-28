@@ -20,9 +20,17 @@
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
     "infra:up": "docker compose -f docker-compose.dev.yml up -d",
-    "infra:down": "docker compose -f docker-compose.dev.yml down"
+    "infra:down": "docker compose -f docker-compose.dev.yml down",
+    "e2e": "playwright test -c e2e/playwright.config.ts",
+    "e2e:report": "playwright show-report e2e/playwright-report"
   },
   "engines": {
     "node": ">=20.19"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  },
+  "overrides": {
+    "image-size": "^2.0.4"
   }
 }

@@ -1,27 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
 import { BookOpen, MonitorPlay, Play } from 'lucide-react';
-import { api } from '../../lib/api';
 import { PageHeader } from '../../components/ui/Card';
 import { ButtonLink } from '../../components/ui/Button';
 import { EmptyState, PageLoader, StatusBadge } from '../../components/ui/Feedback';
 import { timeAgo } from '../../utils/format';
 import { LibraryTabs } from '../../components/layout/hubs';
-
-export interface LessonSummary {
-  _id: string;
-  title: string;
-  subject: string;
-  projectId: string;
-  generationStatus: string;
-  updatedAt: string;
-  sectionCount: number;
-  diagramCount: number;
-  presentation: { _id: string; version: number; slideCount: number } | null;
-}
-
-export function useLessons() {
-  return useQuery({ queryKey: ['lessons'], queryFn: async () => (await api.get<{ lessons: LessonSummary[] }>('/lessons')).lessons });
-}
+import { useLessons } from '../lessons/useLesson';
 
 export function PresentationsPage() {
   const { data, isLoading } = useLessons();

@@ -34,7 +34,12 @@ const generationSchema = new Schema(
     analysis: { type: Schema.Types.Mixed, default: null },
     lessonId: { type: Schema.Types.ObjectId, ref: 'Lesson', default: null },
     presentationId: { type: Schema.Types.ObjectId, ref: 'Presentation', default: null },
+    /** Incremented each time the run is (re)queued; part of the deterministic job id. */
     attemptCount: { type: Number, default: 0 },
+    /** Liveness: refreshed by the pipeline while it runs; stale runs are failed by the sweeper. */
+    heartbeatAt: { type: Date, default: null },
+    /** Set by an explicit retry of the analyze/lesson stage: rewrite sections instead of reusing them. */
+    regenerateSections: { type: Boolean, default: false },
     errorCode: { type: String, default: '' },
     errorMessage: { type: String, default: '' },
     usage: {
@@ -51,6 +56,7 @@ const generationSchema = new Schema(
 generationSchema.index({ ownerId: 1, createdAt: -1 });
 generationSchema.index({ ownerId: 1, status: 1 });
 generationSchema.index({ projectId: 1, createdAt: -1 });
+generationSchema.index({ status: 1, heartbeatAt: 1 });
 
 export type GenerationDoc = HydratedDocument<InferSchemaType<typeof generationSchema>> & { stageResults: StageResult[] };
 export const Generation = model('Generation', generationSchema);

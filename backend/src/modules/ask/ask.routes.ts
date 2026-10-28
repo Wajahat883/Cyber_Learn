@@ -6,8 +6,8 @@ import { AiOutputError, AiProviderError } from '../../ai/types.js';
 import { findOwned } from '../../middleware/authorize.js';
 import { aiLimiter } from '../../middleware/rateLimit.js';
 import { validate } from '../../middleware/validate.js';
-import { Lesson, Source, SourceChunk, User } from '../../models/index.js';
-import { loadChunks } from '../../services/chunks.js';
+import { Lesson, Source, User } from '../../models/index.js';
+import { loadChunks, rankLessonChunks, searchLibrary } from '../../services/chunks.js';
 import { AppError } from '../../utils/errors.js';
 import { userId } from '../../utils/http.js';
 
@@ -29,15 +29,12 @@ askRouter.post('/ask', aiLimiter, validate(AskSchema), async (req, res) => {
     const lesson = await findOwned(Lesson, lessonId, ownerId, 'Lesson');
     const all = await loadChunks(ownerId, lesson.sourceIds);
     const section = sectionId ? (lesson.sections as LessonSection[]).find((s) => s.id === sectionId) : undefined;
-    const preferred = new Set(section?.sourceRefs.map((r) => r.chunkIndex) ?? []);
-    chunks = [...all.filter((c) => preferred.has(c.index)), ...all.filter((c) => !preferred.has(c.index))].slice(0, MAX_CONTEXT_CHUNKS * 2);
+    // Rank the whole lesson against the question; the section being read gets a boost, not automatic priority.
+    const boost = new Set(section?.sourceRefs.map((r) => r.chunkIndex) ?? []);
+    chunks = await rankLessonChunks(ownerId, question, all, { boost, limit: MAX_CONTEXT_CHUNKS * 2 });
   } else {
-    // Library-wide search with MongoDB's text index.
-    const hits = await SourceChunk.find({ ownerId, $text: { $search: question } }, { score: { $meta: 'textScore' } })
-      .sort({ score: { $meta: 'textScore' } })
-      .limit(MAX_CONTEXT_CHUNKS)
-      .lean();
-    chunks = hits.map((c, i) => ({ index: i, text: c.text, heading: c.heading, page: c.page, sourceId: String(c.sourceId) }));
+    // Library-wide: owner-scoped $text candidates re-ranked with BM25 (+ embeddings when configured).
+    chunks = (await searchLibrary(ownerId, question, MAX_CONTEXT_CHUNKS)).map((c, i) => ({ ...c, index: i }));
   }
 
   if (!chunks.length) {
@@ -49,7 +46,7 @@ askRouter.post('/ask', aiLimiter, validate(AskSchema), async (req, res) => {
   try {
     result = await answerFromNotes(await textProviderFor(ownerId), { question, chunks, language: user?.preferences?.language ?? 'en' });
   } catch (err) {
-    if (err instanceof AiProviderError) throw new AppError(err.retryable ? 503 : 502, err.code, err.message);
+    if (err instanceof AiProviderError) throw new AppError(err.code === 'AI_DAILY_LIMIT' ? 429 : err.retryable ? 503 : 502, err.code, err.message);
     if (err instanceof AiOutputError) throw new AppError(502, 'AI_OUTPUT_INVALID', err.message);
     throw err;
   }

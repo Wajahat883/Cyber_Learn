@@ -5,20 +5,14 @@ import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Alert, PageLoader } from '../../components/ui/Feedback';
 import { timeAgo } from '../../utils/format';
-
-interface VersionRow {
-  version: number;
-  reason: string;
-  createdAt: string;
-  snapshot: { title: string };
-}
+import type { LessonVersionRow } from '../../types/models';
 
 /** Previous lesson versions are preserved so useful notes are never lost (Roman Urdu section 7). */
 export function VersionHistory({ lessonId, open, onClose }: { lessonId: string; open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['lesson-versions', lessonId],
-    queryFn: async () => (await api.get<{ versions: VersionRow[] }>(`/lessons/${lessonId}/versions`)).versions,
+    queryFn: async () => (await api.get<{ versions: LessonVersionRow[] }>(`/lessons/${lessonId}/versions`)).versions,
     enabled: open,
   });
   const restore = useMutation({

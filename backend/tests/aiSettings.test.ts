@@ -2,6 +2,9 @@ import http from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import mongoose from 'mongoose';
 import { drainInlineJobs } from '../src/jobs/queues.js';
+import { env } from '../src/config/env.js';
+import { metered } from '../src/services/aiBudget.js';
+import type { TextGenerationProvider } from '../src/ai/types.js';
 import { SAMPLE_TEXT, signUp } from './helpers.js';
 
 // A fake local Ollama (OpenAI-compatible) on the port configured in tests/setup.ts.
@@ -63,6 +66,16 @@ describe('AI provider settings', () => {
     expect((await s.agent.get('/api/v1/account/ai')).body.settings).toBeNull();
   });
 
+  it('saves OpenRouter with fallback models and caps the list', async () => {
+    const s = await signUp();
+    const fallbackModels = ['vendor/model-a:free', 'vendor/model-b:free'];
+    await s.agent.put('/api/v1/account/ai').set('x-csrf-token', s.csrf).send({ provider: 'openrouter', model: 'vendor/main', apiKey: 'sk-or-1234', fallbackModels }).expect(200);
+    const got = await s.agent.get('/api/v1/account/ai').expect(200);
+    expect(got.body.settings).toMatchObject({ provider: 'openrouter', model: 'vendor/main', fallbackModels });
+    const tooMany = Array.from({ length: 6 }, (_, i) => `vendor/m${i}:free`);
+    await s.agent.put('/api/v1/account/ai').set('x-csrf-token', s.csrf).send({ provider: 'openrouter', model: 'vendor/main', fallbackModels: tooMany }).expect(400);
+  });
+
   it('stores API keys encrypted and never returns or exports them', async () => {
     const s = await signUp();
     const secret = 'sk-test-SUPERSECRET-1234';
@@ -79,5 +92,59 @@ describe('AI provider settings', () => {
     // Changing only the model keeps the saved key.
     await s.agent.put('/api/v1/account/ai').set('x-csrf-token', s.csrf).send({ provider: 'groq', model: 'other-model' }).expect(200);
     expect((await s.agent.get('/api/v1/account/ai')).body.settings.keyHint).toBe('••••1234');
+  });
+
+  it('enforces a per-user daily AI budget and reports usage', async () => {
+    const s = await signUp();
+    const fake: TextGenerationProvider = {
+      name: 'openai-compatible',
+      model: 'm',
+      generateStructured: async <T,>() => ({ data: {} as T, usage: { calls: 1, inputChars: 1000, outputChars: 200, inputTokens: 250, outputTokens: 50, model: 'm' } }),
+    };
+    const provider = metered(fake, s.user.id);
+    const before = env.AI_DAILY_CALL_LIMIT;
+    env.AI_DAILY_CALL_LIMIT = 2;
+    try {
+      const req = { task: 'answer' as const, instructions: '', content: '', schema: {} as never };
+      await provider.generateStructured(req);
+      await provider.generateStructured(req);
+      await expect(provider.generateStructured(req)).rejects.toMatchObject({ code: 'AI_DAILY_LIMIT', retryable: false });
+      // The offline mock is never limited.
+      await expect(metered({ ...fake, name: 'mock' }, s.user.id).generateStructured(req)).resolves.toBeTruthy();
+      const usage = (await s.agent.get('/api/v1/account/ai').expect(200)).body.usage;
+      expect(usage.calls).toBe(3);
+      expect(usage.chars).toBe(3600);
+      expect(usage.limits.calls).toBe(2);
+      // Real token counts are recorded alongside characters.
+      expect(usage.tokens).toMatchObject({ input: 750, output: 150 });
+    } finally {
+      env.AI_DAILY_CALL_LIMIT = before;
+    }
+  });
+
+  it('still enforces the daily character limit, and counts failed calls', async () => {
+    const s = await signUp();
+    const before = env.AI_DAILY_CHAR_LIMIT;
+    env.AI_DAILY_CHAR_LIMIT = 1500;
+    try {
+      const req = { task: 'answer' as const, instructions: '', content: '', schema: {} as never };
+      const failing: TextGenerationProvider = {
+        name: 'openai-compatible',
+        model: 'm',
+        generateStructured: async () => {
+          throw new Error('boom');
+        },
+      };
+      const ok: TextGenerationProvider = { ...failing, generateStructured: async <T,>() => ({ data: {} as T, usage: { calls: 1, inputChars: 1400, outputChars: 200 } }) };
+      await expect(metered(failing, s.user.id).generateStructured(req)).rejects.toThrow('boom');
+      await metered(ok, s.user.id).generateStructured(req);
+      await expect(metered(ok, s.user.id).generateStructured(req)).rejects.toMatchObject({ code: 'AI_DAILY_LIMIT' });
+      const usage = (await s.agent.get('/api/v1/account/ai').expect(200)).body.usage;
+      expect(usage.calls).toBe(2);
+      expect(usage.failedCalls).toBe(1);
+      expect(usage.chars).toBe(1600);
+    } finally {
+      env.AI_DAILY_CHAR_LIMIT = before;
+    }
   });
 });

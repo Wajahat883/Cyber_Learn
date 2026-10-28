@@ -16,6 +16,8 @@ RUN npm run build --workspace backend
 
 FROM node:24-alpine AS runtime
 ENV NODE_ENV=production
+# tini as PID 1 forwards SIGTERM for graceful shutdown and reaps zombie processes.
+RUN apk add --no-cache tini
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json packages/shared/
@@ -30,4 +32,5 @@ ENV PORT=4000 STORAGE_LOCAL_DIR=/data/storage
 EXPOSE 4000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
   CMD wget -qO- http://127.0.0.1:4000/api/v1/health || exit 1
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "dist/server.js"]

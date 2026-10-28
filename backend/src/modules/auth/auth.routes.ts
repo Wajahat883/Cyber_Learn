@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { ChangePasswordSchema, ForgotPasswordSchema, LoginSchema, RegisterSchema, ResetPasswordSchema } from '@cyberlearn/shared';
 import { env } from '../../config/env.js';
-import { authenticate, clearSessionCookie, setSessionCookie } from '../../middleware/authenticate.js';
+import { authenticate, clearSessionCookie, optionalAuthenticate, setSessionCookie } from '../../middleware/authenticate.js';
 import { authLimiter } from '../../middleware/rateLimit.js';
 import { validate } from '../../middleware/validate.js';
 import { User } from '../../models/index.js';
@@ -23,7 +23,12 @@ authRouter.post('/login', authLimiter, validate(LoginSchema), async (req, res) =
   res.json({ user: auth.publicUser(user) });
 });
 
-authRouter.post('/logout', (_req, res) => {
+/**
+ * Signing out revokes the session token server-side by rotating the session
+ * version, so a copied cookie stops working too (this signs out every device).
+ */
+authRouter.post('/logout', optionalAuthenticate, async (req, res) => {
+  if (req.user) await User.updateOne({ _id: req.user.id }, { $inc: { sessionVersion: 1 } });
   clearSessionCookie(res);
   res.status(204).end();
 });

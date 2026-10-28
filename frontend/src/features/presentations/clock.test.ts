@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { Slide } from '@cyberlearn/shared';
+import type { DiagramSpec, Slide } from '@cyberlearn/shared';
+import { layoutDiagram } from '@cyberlearn/shared';
 import { PresentationClock } from './clock';
-import { captionAt, frameAt } from './frame';
+import { cameraAt, captionAt, frameAt, wordAt } from './frame';
 
 function manualClock(durations: number[]) {
   // Never schedules real frames; tests drive time with advance().
@@ -113,5 +114,54 @@ describe('frameAt', () => {
   it('finds the caption for a time', () => {
     expect(captionAt(slide.narration.captions, 1000)?.text).toBe('Hello');
     expect(captionAt(slide.narration.captions, 2500)).toBeUndefined();
+  });
+});
+
+describe('auto-camera', () => {
+  const diagram = {
+    id: 'd1',
+    title: 'Pipeline',
+    nodes: ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, label: id.toUpperCase(), kind: 'processor', description: '' })),
+    edges: [
+      { id: 'ab', source: 'a', target: 'b', label: '' },
+      { id: 'bc', source: 'b', target: 'c', label: '' },
+      { id: 'cd', source: 'c', target: 'd', label: '' },
+      { id: 'de', source: 'd', target: 'e', label: '' },
+    ],
+    steps: [],
+    direction: 'LR',
+  } as unknown as DiagramSpec;
+  const layout = layoutDiagram(diagram);
+  const zoomSlide = { ...slide, durationMs: 20000, events: [{ type: 'highlight', targetId: 'a', atMs: 2000, durationMs: 2000 }] } as Slide;
+
+  it('starts on the whole diagram, zooms into the highlighted node, and pulls back at the end', () => {
+    const full = cameraAt(zoomSlide, layout, 0);
+    const zoomed = cameraAt(zoomSlide, layout, 4000);
+    expect(zoomed[2]).toBeLessThan(full[2]);
+    const a = layout.nodes.find((n) => n.id === 'a')!;
+    expect(a.x).toBeGreaterThanOrEqual(zoomed[0]);
+    expect(a.x).toBeLessThanOrEqual(zoomed[0] + zoomed[2]);
+    expect(cameraAt(zoomSlide, layout, 19900)).toEqual(full);
+  });
+
+  it('is a pure function of time', () => {
+    expect(cameraAt(zoomSlide, layout, 2500)).toEqual(cameraAt(zoomSlide, layout, 2500));
+  });
+});
+
+describe('wordAt', () => {
+  const caption = { startMs: 0, endMs: 1000, text: 'one two three four' };
+  it('estimates the spoken word from the caption position', () => {
+    expect(wordAt(caption, 0)).toBe(0);
+    expect(wordAt(caption, 999)).toBe(3);
+  });
+  it('uses provider word timings when present', () => {
+    const words = [
+      { startMs: 0, endMs: 100, text: 'one' },
+      { startMs: 100, endMs: 900, text: 'two' },
+      { startMs: 900, endMs: 950, text: 'three' },
+      { startMs: 950, endMs: 1000, text: 'four' },
+    ];
+    expect(wordAt(caption, 500, words)).toBe(1);
   });
 });
